@@ -27,11 +27,13 @@ const props = withDefaults(defineProps<{
   replyTo?: { id: string; author: string; body: string }
   draftScope?: string
   compact?: boolean
+  commandScope?: "boardroom" | "project"
 }>(), {
   sendResult: undefined,
   replyTo: undefined,
   draftScope: "main",
   compact: false,
+  commandScope: "boardroom",
 })
 
 const emit = defineEmits<{
@@ -71,14 +73,14 @@ const roleOptions = [
   { id: "cto" as const, label: "技术负责人" },
   { id: "product_lead" as const, label: "产品负责人" },
 ]
-const commands = [
+const commands = computed(() => ([
   { id: "poll", label: "发起投票", hint: "创建董事会投票", icon: "i-lucide-chart-no-axes-column" },
   { id: "goal", label: "作为目标", hint: "明确进入执行工作流", icon: "i-lucide-goal" },
   { id: "discuss", label: "仅讨论", hint: "保存为讨论消息", icon: "i-lucide-message-circle" },
   { id: "intervene", label: "人工接管", hint: "打开治理接管操作", icon: "i-lucide-hand" },
   { id: "shadow", label: "影子建议", hint: "打开只读建议操作", icon: "i-lucide-eye" },
   { id: "decision", label: "决策台账", hint: "打开董事会决策", icon: "i-lucide-landmark" },
-] as const
+] as const).filter(command => props.commandScope === "boardroom" || ["goal", "discuss"].includes(command.id)))
 
 function restoreDraft() {
   const draft = parseComposerDraft(import.meta.client ? localStorage.getItem(storageKey.value) : null)
@@ -150,7 +152,7 @@ function pickRole(role: "ceo" | "cto" | "product_lead") {
   nextTick(() => input.value?.focus())
 }
 
-function chooseCommand(command: typeof commands[number]["id"]) {
+function chooseCommand(command: "poll" | "goal" | "discuss" | "intervene" | "shadow" | "decision") {
   body.value = body.value.replace(/^\/\S*/, "").trimStart()
   menu.value = ""
   if (command === "goal") {

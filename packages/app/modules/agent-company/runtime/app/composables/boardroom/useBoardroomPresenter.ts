@@ -4,7 +4,7 @@ import type {
   FounderShadowComparison,
   FounderShadowDecision,
 } from "@agents-company/sdk/v2/founder-os"
-import { computed, onMounted, ref, watch } from "vue"
+import { computed, onMounted, ref, watch, type Ref } from "vue"
 import type {
   CompanyBoardThread,
   CompanyProjectMessage,
@@ -46,7 +46,7 @@ type BoardroomLoadResult = [
 let sharedBoardLoad: { key: string; promise: Promise<BoardroomLoadResult> } | undefined
 
 function errorStatus(error: unknown) {
-  if (typeof error !== "object" || error === null || !("statusCode" in error)) return
+  if (typeof error !== "object" || error === null || !("statusCode" in error)) return undefined
   return typeof error.statusCode === "number" ? error.statusCode : undefined
 }
 
@@ -58,7 +58,7 @@ function errorText(error: unknown, fallback: string) {
   return fallback
 }
 
-export function useBoardroomPresenter() {
+export function useBoardroomPresenter(options: { projectID?: Ref<string | undefined>, loadGovernance?: boolean } = {}) {
   const route = useRoute()
   const { data: snapshot, refresh, signalVersion } = useCompanySnapshot()
   const board = ref<FounderBoardGovernanceProjection | null>(null)
@@ -79,7 +79,7 @@ export function useBoardroomPresenter() {
   const mounted = ref(false)
   const loadedRoomKey = ref("")
 
-  const projectID = computed(() => typeof route.query.project === "string" ? route.query.project : "")
+  const projectID = computed(() => options.projectID?.value ?? (typeof route.query.project === "string" ? route.query.project : ""))
   const roomLoadKey = computed(() => `${snapshot.value.company.id}:${projectID.value}:${signalVersion.value}`)
   const project = computed(() => snapshot.value.projects.find(item => item.id === projectID.value))
   const room = computed(() => toBoardroomRoom(project.value))
@@ -112,9 +112,9 @@ export function useBoardroomPresenter() {
   }))
   const selectedThread = computed(() => {
     const currentPane = pane.value
-    if (currentPane.kind !== "thread") return
+    if (currentPane.kind !== "thread") return undefined
     const message = timeline.value.find(item => item.id === currentPane.messageID)
-    if (!message) return
+    if (!message) return undefined
     return {
       original: message,
       replies: timeline.value.filter(item => item.replyToID === message.id),
@@ -122,12 +122,12 @@ export function useBoardroomPresenter() {
   })
   const selectedDecision = computed(() => {
     const currentPane = pane.value
-    if (currentPane.kind !== "decision") return
+    if (currentPane.kind !== "decision") return undefined
     return governance.value.decisions.find(decision => decision.id === currentPane.decisionID)
   })
   const selectedArtifact = computed(() => {
     const currentPane = pane.value
-    if (currentPane.kind !== "artifact") return
+    if (currentPane.kind !== "artifact") return undefined
     return governance.value.artifacts.find(artifact => artifact.id === currentPane.artifactID && artifact.version === currentPane.version)
   })
   const governanceOptions = computed(() => ({
@@ -151,19 +151,26 @@ export function useBoardroomPresenter() {
     }
     projectMessagesLoading.value = true
     error.value = ""
+    notice.value = ""
     try {
       projectMessages.value = await $fetch<CompanyProjectMessage[]>(
         `/api/agent-company/projects/${encodeURIComponent(projectID.value)}/messages`,
       )
     } catch (reason) {
       projectMessages.value = []
-      error.value = errorText(reason, "项目讨论暂时不可用。")
+      if (errorStatus(reason) === 404) notice.value = "当前 Control Plane 未提供项目会话记录，其他工作上下文仍可使用。"
+      else error.value = errorText(reason, "项目讨论暂时不可用。")
     } finally {
       projectMessagesLoading.value = false
     }
   }
 
   async function loadBoard() {
+    if (options.loadGovernance === false) {
+      board.value = null
+      boardThread.value = null
+      return
+    }
     if (!snapshot.value.company.id || boardLoading.value) return
     boardLoading.value = true
     governanceError.value = ""

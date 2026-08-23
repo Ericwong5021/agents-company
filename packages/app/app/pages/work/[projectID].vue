@@ -34,9 +34,11 @@ import {
   deliveryPackageView,
   type AcceptanceChecklistItem,
 } from "../../../modules/agent-company/runtime/shared/delivery-package"
-import type { ComposerTarget } from "../../../modules/agent-company/runtime/shared/company-composer"
 import { diagnosticsCount } from "../../../modules/agent-company/runtime/shared/seed-grow-view"
 import { safeExecutionSummary } from "../../../modules/agent-company/runtime/shared/execution-diagnostics"
+import WorkConversation from "../../../modules/agent-company/runtime/app/components/work/WorkConversation.vue"
+import { toWorkRoomContext } from "../../../modules/agent-company/runtime/app/adapters/work-room.adapter"
+import { useBoardroomPresenter } from "../../../modules/agent-company/runtime/app/composables/boardroom/useBoardroomPresenter"
 
 const route = useRoute()
 const appConfig = useAppConfig()
@@ -45,6 +47,7 @@ const telemetry = useProductTelemetry()
 const workID = computed(() =>
   Array.isArray(route.params.projectID) ? route.params.projectID[0] : route.params.projectID,
 )
+const collaboration = useBoardroomPresenter({ projectID: workID, loadGovernance: false })
 const available = computed(() => ["ready", "degraded"].includes(snapshot.value.connection))
 const workUnavailable = computed(() => snapshot.value.issue?.unavailable.includes("work") ?? false)
 const {
@@ -66,26 +69,6 @@ const isArchivedWork = computed(() =>
     item => (item.availability === "available" ? item.summary.workId : item.workId) === workID.value,
   ),
 )
-
-const workList = computed(() =>
-  snapshot.value.work.map((item) =>
-    item.availability === "available"
-      ? { id: item.summary.workId, title: item.summary.title, status: item.summary.userStatus, ok: true as const }
-      : { id: item.workId, title: item.title, status: "unavailable", ok: false as const },
-  ),
-)
-const currentWorkEntry = computed(() =>
-  workList.value.find((entry) => entry.id === workID.value)
-  ?? (work.value?.availability === "available"
-    ? {
-        id: work.value.summary.workId,
-        title: work.value.summary.title,
-        status: work.value.summary.userStatus,
-        ok: true as const,
-      }
-    : undefined),
-)
-const historicalWorkList = computed(() => workList.value.filter((entry) => entry.id !== workID.value))
 
 const {
   data: goalBriefResult,
@@ -118,6 +101,7 @@ const {
   () => `/api/agent-company/projects/${encodeURIComponent(workID.value ?? "")}`,
 )
 const detail = computed(() => detailResult.value ?? undefined)
+const workRoomContext = computed(() => toWorkRoomContext(detail.value))
 const {
   data: seedGrowResult,
   status: seedGrowStatus,
@@ -171,6 +155,10 @@ async function refreshProjectExperience(projectID = workID.value) {
   await refreshProjectExperience(nextProjectID)
 }
 
+async function refreshWorkRoom() {
+  await Promise.all([refreshProjectExperience(), collaboration.refreshRoom()])
+}
+
 async function refreshRestoredProject() {
   restoringWork.value = true
   for (let attempt = 0; attempt < 4; attempt += 1) {
@@ -221,19 +209,6 @@ watch(
   },
   { immediate: true },
 )
-const workspaceHeadline = computed(() => {
-  if (work.value?.availability !== "available") return ""
-  const projection = work.value
-  const artifactCount = projection.delivery?.artifacts.length ?? 0
-  if (projection.summary.userStatus === "accepted") return "交付已验收"
-  if (projection.delivery && projection.summary.needsUserAction)
-    return `${artifactCount} 项成果待你验收`
-  if (projection.summary.needsUserAction) return "团队需要你的决定"
-  if (projection.summary.userStatus === "paused") return "工作已暂停"
-  if (projection.progress.totalItems)
-    return `${projection.progress.completedItems} / ${projection.progress.totalItems} 项工作已完成`
-  return humanLabel(projection.summary.phase)
-})
 const featuredDeliveryArtifacts = computed(() => {
   const prioritized = deliveryArtifacts.value.filter(artifact =>
     /视觉|设计|界面|画布|线框|原型|图稿|稿件/.test(artifact.title),
@@ -478,13 +453,6 @@ const diagnosticGroups = computed(() =>
   ),
 )
 
-// WORK-04：工作区 Composer 只在项目可用时挂载，发送目标固定为当前项目频道。
-const composerTarget = computed<ComposerTarget | undefined>(() =>
-  work.value?.availability === "available"
-    ? { kind: "project", projectId: work.value.summary.workId, title: work.value.summary.title }
-    : undefined,
-)
-
 // 右侧上下文面板只依据真实数据存在与否派生；Thread 明细需后端接线，此处不虚构。
 // 目标摘要读取失败时仍保留“目标”面板入口，如实展示不可用状态而不是隐藏整个面板；404 表示本来就没有目标摘要，不制造面板。
 const panels = computed(() =>
@@ -516,6 +484,7 @@ const panels = computed(() =>
 const viewStore = useState<Record<string, WorkspaceViewState>>("work-workspace-view", () => ({}))
 const column = ref<WorkspaceColumn>("main")
 const activePanel = ref<ContextPanelKind>()
+const contextOpen = ref(false)
 const hydrated = ref(false)
 const selectedArtifactID = ref<string>()
 const selectedAgentID = ref<string>()
@@ -582,6 +551,7 @@ watch(
       },
     )
     column.value = typeof route.query.panel === "string" ? "context" : reconciled.column
+    contextOpen.value = column.value === "context"
     activePanel.value = reconciled.activePanel
     selectedArtifactID.value = reconciled.selectedArtifactID
     selectedAgentID.value = reconciled.selectedAgentID
@@ -616,7 +586,10 @@ watch([panels, detail, () => route.query.panel], () => {
       workItems: detail.value?.workItems ?? [],
     },
   )
-  if (queryPanel) column.value = "context"
+  if (queryPanel) {
+    column.value = "context"
+    contextOpen.value = true
+  }
   activePanel.value = reconciled.activePanel
   selectedArtifactID.value = reconciled.selectedArtifactID
   selectedAgentID.value = reconciled.selectedAgentID
@@ -627,8 +600,21 @@ async function selectPanel(kind: ContextPanelKind) {
   persistFor(workID.value)
   activePanel.value = resolveActivePanel(kind, panels.value)
   column.value = "context"
+  contextOpen.value = true
   await restoreScroll()
   persistFor(workID.value)
+}
+
+function closeContext() {
+  contextOpen.value = false
+  column.value = "main"
+  persist()
+}
+
+async function openWorkRoomPanel(kind: ContextPanelKind, id?: string) {
+  if (kind === "task" && id) selectedWorkItemID.value = id
+  if (kind === "artifact" && id) selectedArtifactID.value = id
+  await selectPanel(kind)
 }
 
 function selectArtifact(id: string) {
@@ -657,6 +643,7 @@ async function navigatePanel(event: KeyboardEvent, kind: ContextPanelKind) {
 
 function goColumn(direction: "next" | "prev") {
   column.value = direction === "next" ? nextColumn(column.value) : prevColumn(column.value)
+  contextOpen.value = column.value === "context"
   persist()
 }
 
@@ -1382,7 +1369,7 @@ function artifactRoute(projectID: string, artifactID: string) {
 
     <template #body>
       <div
-        class="ac-work3"
+        class="ac-boardroom ac-work3 ac-work4"
         :data-column="column"
         :data-detail-project-id="detail?.project.id"
         :data-organization-watermark="seedGrow?.organization.sourceWatermark"
@@ -1390,50 +1377,8 @@ function artifactRoute(projectID: string, artifactID: string) {
         :data-validation-watermark="seedGrow?.validation.sourceWatermark"
         :data-message-watermark="projectMessages.map((message) => message.id).join(',')"
       >
-        <!-- 左栏：选择工作与 Thread -->
-        <aside class="ac-work3__col ac-work3__list" aria-label="工作列表">
-          <div class="ac-work3__list-head">
-            <NuxtLink to="/work" class="ac-back-link">
-              <UIcon name="i-lucide-arrow-left" />
-              全部工作
-            </NuxtLink>
-          </div>
-          <nav class="ac-work3__list-items">
-            <p class="ac-card-kicker">{{ isArchivedWork ? "已归档工作" : "当前工作" }}</p>
-            <NuxtLink
-              v-if="currentWorkEntry"
-              :to="`/work/${encodeURIComponent(currentWorkEntry.id)}`"
-              class="ac-work3__list-item"
-              data-active="true"
-            >
-              <span class="ac-work3__list-title">{{ currentWorkEntry.title }}</span>
-              <span class="ac-status-badge" :data-status="currentWorkEntry.ok ? currentWorkEntry.status : 'unavailable'">
-                {{ currentWorkEntry.ok ? appConfig.experience.statusLabels[currentWorkEntry.status] : "状态不可用" }}
-              </span>
-            </NuxtLink>
-            <details v-if="historicalWorkList.length" class="ac-source-trace">
-              <summary>历史工作（{{ historicalWorkList.length }}）</summary>
-              <NuxtLink
-                v-for="entry in historicalWorkList"
-                :key="entry.id"
-                :to="`/work/${encodeURIComponent(entry.id)}`"
-                class="ac-work3__list-item"
-              >
-                <span class="ac-work3__list-title">{{ entry.title }}</span>
-                <span class="ac-status-badge" :data-status="entry.ok ? entry.status : 'unavailable'">
-                  {{ entry.ok ? appConfig.experience.statusLabels[entry.status] : "状态不可用" }}
-                </span>
-              </NuxtLink>
-            </details>
-          </nav>
-        </aside>
-
-        <!-- 中栏：高信号目标、进展、需处理、交付 -->
         <section ref="mainColumn" class="ac-work3__col ac-work3__main" aria-label="高信号工作流">
           <div class="ac-work3__mobile-bar">
-            <button type="button" class="ac-work3__mobile-btn" @click="goColumn('prev')">
-              <UIcon name="i-lucide-panel-left" /> 列表
-            </button>
             <button v-if="panels.length" type="button" class="ac-work3__mobile-btn" @click="goColumn('next')">
               上下文 <UIcon name="i-lucide-panel-right" />
             </button>
@@ -1464,29 +1409,25 @@ function artifactRoute(projectID: string, artifactID: string) {
           </div>
 
           <template v-else-if="work?.availability === 'available'">
-            <header class="ac-workspace-header">
-              <div>
-                <p class="ac-workspace-eyebrow">{{ work.summary.phase }}</p>
-                <h1 class="ac-workspace-title">{{ workspaceHeadline }}</h1>
-                <p class="ac-workspace-goal" :title="humanLabel(work.summary.title)">
-                  {{ humanLabel(work.summary.title) }}
-                </p>
-                <p class="ac-workspace-lede">{{ humanLabel(work.summary.reason.text) }}</p>
-                <!-- DELIV-02 — 首屏直接回答“谁负责 / 下一里程碑 / 是否需用户行动” -->
-                <div class="ac-work-meta">
-                  <span>工作 #{{ work.summary.workId.slice(-8) }}</span>
-                  <span v-if="work.summary.owner">负责人：{{ agentDisplayName(work.summary.owner.id) }}</span>
-                  <span v-if="work.summary.nextMilestone">
-                    下一里程碑：{{ humanLabel(work.summary.nextMilestone.title) }}
-                    <small v-if="work.summary.nextMilestone.completed">（已完成）</small>
-                  </span>
-                  <span v-if="work.summary.needsUserAction" class="ac-work-meta__flag">需要你的行动</span>
-                </div>
-              </div>
-              <span class="ac-status-badge" :data-status="isArchivedWork ? 'archived' : work.summary.userStatus">
-                {{ isArchivedWork ? "已归档" : appConfig.experience.statusLabels[work.summary.userStatus] }}
-              </span>
-            </header>
+            <WorkConversation
+              :projection="collaboration.projection.value"
+              :context="workRoomContext"
+              :loading="collaboration.loading.value"
+              :messages-loading="collaboration.projectMessagesLoading.value"
+              :send-result="collaboration.sendResult.value"
+              :phase="work.summary.phase"
+              :progress-label="`${work.progress.completedItems} / ${work.progress.totalItems} 项工作已完成`"
+              :status-label="isArchivedWork ? '已归档' : appConfig.experience.statusLabels[work.summary.userStatus]"
+              @refresh="refreshWorkRoom"
+              @send="collaboration.sendMessage"
+              @retry="collaboration.retryMessage"
+              @promote="collaboration.promoteMessage"
+              @react="collaboration.react"
+              @vote="collaboration.vote"
+              @poll="collaboration.createPoll"
+              @read="collaboration.markRead"
+              @panel="openWorkRoomPanel"
+            />
 
             <TaskFlowCanvas
               v-if="detail && currentPlanWorkItems.length"
@@ -1844,12 +1785,6 @@ function artifactRoute(projectID: string, artifactID: string) {
               </section>
             </div>
 
-            <CompanyComposer
-              v-if="composerTarget"
-              :target="composerTarget"
-              :agents="snapshot.agents"
-              @sent="refreshProjectMessages()"
-            />
           </template>
 
           <template v-else-if="work?.availability === 'unavailable'">
@@ -1875,8 +1810,14 @@ function artifactRoute(projectID: string, artifactID: string) {
           </section>
         </section>
 
-        <!-- 右栏：上下文面板 -->
-        <aside ref="contextColumn" class="ac-work3__col ac-work3__context" aria-label="上下文面板">
+        <ContextPane
+          :open="contextOpen"
+          :wide="['task', 'artifact', 'diagnostics'].includes(renderedActivePanel ?? '')"
+          :title="renderedActivePanel ? contextPanelLabels[renderedActivePanel] : '工作上下文'"
+          subtitle="查看当前选择的真实工作事实"
+          @close="closeContext"
+        >
+          <div ref="contextColumn" class="ac-work3__context-body">
           <div v-if="panels.length" class="ac-work3__tabs" role="tablist">
             <button
               v-for="kind in panels"
@@ -2190,8 +2131,16 @@ function artifactRoute(projectID: string, artifactID: string) {
 
             <p v-else class="ac-brief-state">当前工作还没有可显示的上下文。</p>
           </div>
-        </aside>
+          </div>
+        </ContextPane>
       </div>
     </template>
   </UDashboardPanel>
 </template>
+
+<style scoped>
+.ac-work4 { grid-template-columns: minmax(0, 1fr) auto !important; background: var(--ac-boardroom-canvas); }
+.ac-work4 .ac-work3__main { display: block !important; min-width: 0; }
+.ac-work3__context-body { min-height: 100%; background: var(--ac-boardroom-paper); }
+@media (max-width: 960px) { .ac-work4 { grid-template-columns: minmax(0, 1fr) !important; } }
+</style>
