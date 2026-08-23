@@ -185,6 +185,7 @@ function environment(input: AgentRunSpec, binary: string): NodeJS.ProcessEnv {
 }
 
 function start(input: AgentRunSpec, onEvent: (event: AgentRunEvent) => void): AgentRunHandle {
+  if (input.runtime === "pi") throw new Error("CLI runtime adapter cannot start the Pi runtime")
   const startedAt = Date.now()
   const temporaryCredential = prepareCodexHome(input)
   const temporaryOutputSchema = prepareOutputSchema(input)

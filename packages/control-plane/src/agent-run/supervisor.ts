@@ -195,6 +195,7 @@ export const layer = Layer.effect(
         resolver.resolve({ explicitRuntime: input.runtime, requiredCapabilities }),
       )
       const availability = yield* Effect.promise(() => runtime.discover())
+      const runtimeModel = runtime.runtime === "pi" ? resolvedInput.model : brain ? undefined : input.model
       const capabilityChecksum = createHash("sha256")
         .update(packs.map((pack) => `${pack.id}@${pack.version}:${pack.checksum}`).sort().join("\n"))
         .digest("hex")
@@ -221,7 +222,7 @@ export const layer = Layer.effect(
         companyProjectID: input.companyProjectID,
         workItemID: input.workItemID,
         worktreeRunID: input.worktreeRunID,
-        model: resolvedInput.model,
+        model: runtimeModel,
         reasoningEffort: input.reasoningEffort,
         cwd: input.cwd,
         runtimeHomePath: home.home,
@@ -255,7 +256,7 @@ export const layer = Layer.effect(
           cwd: input.cwd,
           capabilityPacks: input.capabilityPacks,
           brain: brain ? "big" : undefined,
-          model: resolvedInput.model,
+          model: runtimeModel,
         },
       })
 
@@ -272,6 +273,7 @@ export const layer = Layer.effect(
       }
       const handle = supervisor.start({
         ...resolvedInput,
+        model: runtimeModel,
         runtime: runtime.runtime,
         runID: run.id,
         runtimeHome: home.home,
