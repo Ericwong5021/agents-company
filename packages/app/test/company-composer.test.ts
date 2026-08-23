@@ -22,8 +22,8 @@ import {
 // WORK-04 — 统一 Composer 的纯逻辑：目标标签、提及、幂等、草稿隔离与失败文案。
 
 describe("composerTargetLabel / composerIntentHint", () => {
-  test("看板目标标签与意图提示", () => {
-    expect(composerTargetLabel({ kind: "board" })).toBe("公司看板")
+  test("董事会目标标签与意图提示", () => {
+    expect(composerTargetLabel({ kind: "board" })).toBe("董事会")
     expect(composerIntentHint({ kind: "board" })).toContain("意图分类")
   })
 

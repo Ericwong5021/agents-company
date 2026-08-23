@@ -14,6 +14,7 @@
 - 产品真值以 `docs/README.md` 索引的文档为准。当前按 `docs/product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md` 的 R0 到 R4 顺序推进，当前阶段是 R0。
 - `packages/app` 是唯一产品入口，`packages/control-plane` 负责本地控制面和 Agent 运行时，不恢复终端产品界面。
 - 产品是单用户、本地优先、领域中立的 Agent 公司，核心是动态自组织和自治理。软件开发只是领域适配器。
+- 前端呈现层以 `yetone/cumora@5dbbdee15b66e9f3faa52aacad14e8e27fe583e1` 为视觉和交互参考，在 Nuxt/Vue 中重写；不引入 React、Cumora 后端、状态管理或运行时。先完成董事会纵向切片，再迁移 Work 和 Operations，现有 API、实时事件、权限、工作流和领域模型保持不变。
 - 不保留旧 AgentCompany 的文件系统、配置或 API 兼容性，除非用户明确要求迁移桥接。
 - Ambient、Reflection、Direct、Dreaming 和 Agent Home 继续冻结。多用户云托管、移动端、复杂 2D/3D 办公室不在当前范围。
 - 机器 Gate 通过不代表人工授权或真实样本验收通过。代码和设计文档不一致时，明确说明差距。

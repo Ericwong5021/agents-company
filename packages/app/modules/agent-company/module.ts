@@ -24,7 +24,37 @@ export default defineNuxtModule<AgentCompanyModuleOptions>({
 
     const resolver = createResolver(import.meta.url)
 
+    nuxt.options.css.push(resolver.resolve("./runtime/app/assets/boardroom-tokens.css"))
+    nuxt.options.css.push(resolver.resolve("./runtime/app/assets/boardroom-motion.css"))
     nuxt.options.css.push(resolver.resolve("./runtime/app/assets/company-extension.css"))
+    addComponent({
+      name: "AppButton",
+      filePath: resolver.resolve("./runtime/app/components/ui/AppButton.vue"),
+    })
+    addComponent({
+      name: "AppAvatar",
+      filePath: resolver.resolve("./runtime/app/components/ui/AppAvatar.vue"),
+    })
+    addComponent({
+      name: "AppTooltip",
+      filePath: resolver.resolve("./runtime/app/components/ui/AppTooltip.vue"),
+    })
+    addComponent({
+      name: "AppPopover",
+      filePath: resolver.resolve("./runtime/app/components/ui/AppPopover.vue"),
+    })
+    addComponent({
+      name: "AppDialog",
+      filePath: resolver.resolve("./runtime/app/components/ui/AppDialog.vue"),
+    })
+    addComponent({
+      name: "AppScrollArea",
+      filePath: resolver.resolve("./runtime/app/components/ui/AppScrollArea.vue"),
+    })
+    addComponent({
+      name: "AppResizablePane",
+      filePath: resolver.resolve("./runtime/app/components/ui/AppResizablePane.vue"),
+    })
     addComponent({
       name: "CompanyModuleNav",
       filePath: resolver.resolve("./runtime/app/components/CompanyModuleNav.vue"),

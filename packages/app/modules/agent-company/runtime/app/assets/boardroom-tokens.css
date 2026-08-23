@@ -1,0 +1,125 @@
+/* Adapted from yetone/cumora@5dbbdee under the MIT License. Reimplemented for Vue/Nuxt and AgentCompany domain models. */
+.ac-boardroom {
+  --ac-boardroom-font-sans:
+    "Manrope", -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Noto Sans SC", "Segoe UI", sans-serif;
+  --ac-boardroom-font-mono: "SFMono-Regular", "Cascadia Code", "Roboto Mono", monospace;
+  --ac-boardroom-accent: #00a8f0;
+  --ac-boardroom-accent-strong: #0078c8;
+  --ac-boardroom-accent-ink: #003b6f;
+  --ac-boardroom-accent-50: #f2fafe;
+  --ac-boardroom-accent-100: #e1f3fd;
+  --ac-boardroom-accent-200: #c2e6fb;
+  --ac-boardroom-accent-300: #8fd3f7;
+  --ac-boardroom-danger: #c84e3f;
+  --ac-boardroom-danger-soft: #ffd9d2;
+  --ac-boardroom-warning: #f4b740;
+  --ac-boardroom-success: #6ec56a;
+  --ac-boardroom-thinking: #8a78c8;
+  --ac-boardroom-resting: #b8c4d1;
+  --ac-boardroom-canvas: #f2f7fa;
+  --ac-boardroom-sidebar: #f6f9fb;
+  --ac-boardroom-paper: #fafcfe;
+  --ac-boardroom-cloud: #ffffff;
+  --ac-boardroom-ink-900: #0a1b2e;
+  --ac-boardroom-ink-700: #233a53;
+  --ac-boardroom-ink-500: #5b7186;
+  --ac-boardroom-ink-300: #94a8bc;
+  --ac-boardroom-ink-200: #c5d2de;
+  --ac-boardroom-ink-100: #e5ecf2;
+  --ac-boardroom-overlay: rgb(10 27 46 / 0.28);
+  --ac-boardroom-focus: rgb(0 120 200 / 0.34);
+  --ac-boardroom-scrollbar: #c5d2de;
+  --ac-boardroom-scrollbar-hover: #94a8bc;
+  --ac-boardroom-avatar-ring: #fafcfe;
+  --ac-boardroom-avatar-sky: #0078c8;
+  --ac-boardroom-avatar-coral: #c84e3f;
+  --ac-boardroom-avatar-gold: #ba8418;
+  --ac-boardroom-avatar-ink: #233a53;
+  --ac-boardroom-space-1: 4px;
+  --ac-boardroom-space-2: 8px;
+  --ac-boardroom-space-3: 12px;
+  --ac-boardroom-space-4: 16px;
+  --ac-boardroom-space-5: 20px;
+  --ac-boardroom-space-6: 24px;
+  --ac-boardroom-space-8: 32px;
+  --ac-boardroom-radius-xs: 6px;
+  --ac-boardroom-radius-sm: 8px;
+  --ac-boardroom-radius-md: 12px;
+  --ac-boardroom-radius-lg: 16px;
+  --ac-boardroom-radius-xl: 22px;
+  --ac-boardroom-radius-pill: 999px;
+  --ac-boardroom-control-height-sm: 36px;
+  --ac-boardroom-control-height: 40px;
+  --ac-boardroom-control-height-lg: 44px;
+  --ac-boardroom-shadow-control: 0 1px 2px rgb(10 27 46 / 0.08), 0 0 0 1px rgb(10 27 46 / 0.04);
+  --ac-boardroom-shadow-popover: 0 18px 48px -18px rgb(10 27 46 / 0.28), 0 4px 14px -6px rgb(10 27 46 / 0.16);
+  --ac-boardroom-shadow-dialog: 0 32px 80px -24px rgb(10 27 46 / 0.38), 0 8px 24px -12px rgb(10 27 46 / 0.2);
+  color: var(--ac-boardroom-ink-900);
+  font-family: var(--ac-boardroom-font-sans);
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.dark .ac-boardroom,
+.ac-boardroom.dark {
+  --ac-boardroom-accent: #66c7f2;
+  --ac-boardroom-accent-strong: #8fd3f7;
+  --ac-boardroom-accent-ink: #d9f1fc;
+  --ac-boardroom-accent-50: #132d3b;
+  --ac-boardroom-accent-100: #19384a;
+  --ac-boardroom-accent-200: #285169;
+  --ac-boardroom-accent-300: #4d91b5;
+  --ac-boardroom-danger: #ff8a7e;
+  --ac-boardroom-danger-soft: #4a2929;
+  --ac-boardroom-warning: #f4c76d;
+  --ac-boardroom-success: #85d381;
+  --ac-boardroom-thinking: #aa98e1;
+  --ac-boardroom-resting: #708795;
+  --ac-boardroom-canvas: #0d1720;
+  --ac-boardroom-sidebar: #111d27;
+  --ac-boardroom-paper: #13212c;
+  --ac-boardroom-cloud: #182a36;
+  --ac-boardroom-ink-900: #edf5fa;
+  --ac-boardroom-ink-700: #cfdee7;
+  --ac-boardroom-ink-500: #a6bac8;
+  --ac-boardroom-ink-300: #708795;
+  --ac-boardroom-ink-200: #3b5362;
+  --ac-boardroom-ink-100: #263b49;
+  --ac-boardroom-overlay: rgb(3 9 13 / 0.64);
+  --ac-boardroom-focus: rgb(102 199 242 / 0.42);
+  --ac-boardroom-scrollbar: #3b5362;
+  --ac-boardroom-scrollbar-hover: #708795;
+  --ac-boardroom-avatar-ring: #13212c;
+  --ac-boardroom-avatar-sky: #285169;
+  --ac-boardroom-avatar-coral: #81443e;
+  --ac-boardroom-avatar-gold: #80652e;
+  --ac-boardroom-avatar-ink: #3b5362;
+  --ac-boardroom-shadow-control: 0 1px 2px rgb(0 0 0 / 0.24), 0 0 0 1px rgb(255 255 255 / 0.05);
+  --ac-boardroom-shadow-popover: 0 18px 48px -18px rgb(0 0 0 / 0.72), 0 0 0 1px rgb(255 255 255 / 0.06);
+  --ac-boardroom-shadow-dialog: 0 32px 80px -24px rgb(0 0 0 / 0.82), 0 0 0 1px rgb(255 255 255 / 0.08);
+}
+
+.ac-boardroom *,
+.ac-boardroom *::before,
+.ac-boardroom *::after {
+  box-sizing: border-box;
+}
+
+.ac-boardroom button,
+.ac-boardroom a,
+.ac-boardroom input,
+.ac-boardroom textarea,
+.ac-boardroom [role="button"] {
+  touch-action: manipulation;
+}
+
+.ac-boardroom :focus-visible {
+  outline: 2px solid var(--ac-boardroom-focus);
+  outline-offset: 2px;
+}
+
+.ac-boardroom ::selection {
+  background: var(--ac-boardroom-accent-200);
+  color: var(--ac-boardroom-accent-ink);
+}

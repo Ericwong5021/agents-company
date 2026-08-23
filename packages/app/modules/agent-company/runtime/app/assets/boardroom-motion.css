@@ -1,0 +1,40 @@
+.ac-boardroom {
+  --ac-boardroom-motion-fast: 100ms;
+  --ac-boardroom-motion-base: 160ms;
+  --ac-boardroom-motion-slow: 240ms;
+  --ac-boardroom-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ac-boardroom-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+}
+
+@keyframes ac-boardroom-rise {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes ac-boardroom-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ac-boardroom .ac-motion-rise,
+.ac-boardroom.ac-motion-rise {
+  animation: ac-boardroom-rise var(--ac-boardroom-motion-slow) var(--ac-boardroom-ease-out) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ac-boardroom,
+  .ac-boardroom * {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
