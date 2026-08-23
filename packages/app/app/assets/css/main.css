@@ -3307,7 +3307,7 @@ textarea:focus-visible {
   }
 
   .ac-shell-navbar__menu {
-    display: none !important;
+    display: inline-grid !important;
   }
 
   .ac-mobile-brand {

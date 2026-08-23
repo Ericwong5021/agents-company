@@ -56,6 +56,26 @@ export default defineNuxtModule<AgentCompanyModuleOptions>({
       filePath: resolver.resolve("./runtime/app/components/ui/AppResizablePane.vue"),
     })
     addComponent({
+      name: "AppTitlebar",
+      filePath: resolver.resolve("./runtime/app/components/shell/AppTitlebar.vue"),
+    })
+    addComponent({
+      name: "AppRail",
+      filePath: resolver.resolve("./runtime/app/components/shell/AppRail.vue"),
+    })
+    addComponent({
+      name: "ContextSidebar",
+      filePath: resolver.resolve("./runtime/app/components/shell/ContextSidebar.vue"),
+    })
+    addComponent({
+      name: "WorkspaceStage",
+      filePath: resolver.resolve("./runtime/app/components/shell/WorkspaceStage.vue"),
+    })
+    addComponent({
+      name: "ContextPane",
+      filePath: resolver.resolve("./runtime/app/components/shell/ContextPane.vue"),
+    })
+    addComponent({
       name: "CompanyModuleNav",
       filePath: resolver.resolve("./runtime/app/components/CompanyModuleNav.vue"),
     })

@@ -228,6 +228,13 @@ test("@r0-shell exposes one stable, branded navigation model", async ({ page, re
 
   const primaryNav = page.getByRole("navigation", { name: "主导航" })
   await expect(primaryNav).toBeVisible()
+  await expect(page.locator(".ac-app-rail").getByRole("button", { name: "本地账号菜单" })).toBeVisible()
+  const contextResizeHandle = page.getByRole("separator", { name: "调整当前模块导航宽度" })
+  await expect(contextResizeHandle).toHaveAttribute("aria-valuenow", "320")
+  await contextResizeHandle.press("ArrowRight")
+  await expect(contextResizeHandle).toHaveAttribute("aria-valuenow", "336")
+  await contextResizeHandle.press("ArrowLeft")
+  await expect(contextResizeHandle).toHaveAttribute("aria-valuenow", "320")
   await expect
     .poll(async () => (await primaryNav.getByRole("link").evaluateAll(links =>
       links.map(link => link.getAttribute("aria-label") ?? "")))
@@ -659,6 +666,7 @@ test("@r0-shell keeps keyboard access and 40px navigation targets", async ({ pag
 })
 
 test("@r0-shell remains stable at 375px", async ({ page }, testInfo) => {
+  test.slow()
   await page.setViewportSize({ width: 375, height: 812 })
   await enterWorkspace(page)
 
@@ -678,7 +686,13 @@ test("@r0-shell remains stable at 375px", async ({ page }, testInfo) => {
     { name: /^成果/, path: "/library" },
   ])
     await expect(mobileNav.getByRole("link", { name: item.name })).toHaveAttribute("href", item.path)
-  await expect(page.getByRole("button", { name: "打开主导航" })).toHaveCount(0)
+  const moduleNavigationButton = page.getByRole("button", { name: "打开主导航" })
+  await expect(moduleNavigationButton).toBeVisible()
+  await moduleNavigationButton.click()
+  await expect(page.locator(".ac-app-shell__sidebar[data-open='true']")).toBeVisible()
+  await page.screenshot({ path: testInfo.outputPath("shell-mobile-drawer.png"), fullPage: true })
+  await page.getByRole("complementary", { name: "当前模块导航" }).getByRole("button", { name: "关闭当前模块导航" }).click()
+  await expect(page.locator(".ac-app-shell__sidebar")).toHaveAttribute("data-open", "false")
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth))
     .toBe(true)
