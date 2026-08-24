@@ -1794,7 +1794,18 @@ function artifactRoute(projectID: string, artifactID: string) {
                 <h1 class="ac-workspace-title">{{ humanLabel(work.title) }}</h1>
                 <p class="ac-workspace-lede">{{ humanLabel(work.reason.text) }}</p>
               </div>
-              <span class="ac-status-badge" data-status="unavailable">状态不可用</span>
+              <div class="ac-workspace-header__actions">
+                <span class="ac-status-badge" data-status="unavailable">状态不可用</span>
+                <UButton
+                  v-if="panels.includes('diagnostics')"
+                  color="neutral"
+                  variant="outline"
+                  icon="i-lucide-stethoscope"
+                  @click="selectPanel('diagnostics')"
+                >
+                  查看诊断
+                </UButton>
+              </div>
             </header>
           </template>
 

@@ -39,15 +39,14 @@ const currentWork = computed(() =>
     </template>
 
     <template #body>
-      <div class="company-page company-page--overview">
-        <header class="company-page__header">
-          <div>
-            <p class="company-eyebrow">公司总览</p>
-            <h1>{{ snapshot.company.name }}</h1>
-            <p class="company-page__lede">查看本地团队、当前工作和运行边界，再进入需要处理的具体页面。</p>
-          </div>
+      <ModuleWorkspace
+        eyebrow="公司总览"
+        :title="snapshot.company.name"
+        description="查看本地团队、当前工作和运行边界，再进入需要处理的具体页面。"
+      >
+        <template #actions>
           <span class="company-connection" :data-state="snapshot.connection">{{ connectionLabel }}</span>
-        </header>
+        </template>
 
         <CompanyConnectionState
           v-if="!companyAvailable"
@@ -140,23 +139,76 @@ const currentWork = computed(() =>
             </section>
           </div>
 
-          <section class="company-section">
+          <section class="company-section ac-overview-destinations">
             <div class="company-section__heading">
               <div>
                 <p class="company-eyebrow">快速入口</p>
                 <h2>进入工作区域</h2>
               </div>
             </div>
-            <div class="ac-work3__actions">
-              <NuxtLink class="ac-work3__action" to="/inbox">收件箱</NuxtLink>
-              <NuxtLink class="ac-work3__action" to="/company/board">董事会</NuxtLink>
-              <NuxtLink class="ac-work3__action" to="/company/operations">运营记录</NuxtLink>
-              <NuxtLink class="ac-work3__action" to="/team">团队</NuxtLink>
-              <NuxtLink class="ac-work3__action" to="/library">成果库</NuxtLink>
+            <div class="ac-overview-destinations__list">
+              <NuxtLink to="/inbox"><UIcon name="i-lucide-inbox" />收件箱</NuxtLink>
+              <NuxtLink to="/company/board"><UIcon name="i-lucide-messages-square" />董事会</NuxtLink>
+              <NuxtLink to="/company/operations"><UIcon name="i-lucide-activity" />运营记录</NuxtLink>
+              <NuxtLink to="/team"><UIcon name="i-lucide-users-round" />团队</NuxtLink>
+              <NuxtLink to="/library"><UIcon name="i-lucide-library-big" />成果库</NuxtLink>
             </div>
           </section>
         </template>
-      </div>
+      </ModuleWorkspace>
     </template>
   </UDashboardPanel>
 </template>
+
+<style scoped>
+.ac-overview-destinations {
+  margin-top: 14px;
+}
+
+.ac-overview-destinations__list {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ac-overview-destinations__list a {
+  display: flex;
+  min-height: 72px;
+  align-items: center;
+  gap: 9px;
+  border-radius: var(--ac-boardroom-radius-sm);
+  padding: 12px;
+  background: var(--ac-boardroom-sidebar);
+  color: var(--ac-boardroom-ink-700);
+  font-size: 12px;
+  font-weight: 650;
+  transition: background-color var(--ac-boardroom-motion-base) var(--ac-boardroom-ease-standard), color var(--ac-boardroom-motion-base) var(--ac-boardroom-ease-standard), transform var(--ac-boardroom-motion-fast) var(--ac-boardroom-ease-standard);
+}
+
+.ac-overview-destinations__list a:active {
+  transform: scale(0.96);
+}
+
+.ac-overview-destinations__list svg {
+  width: 18px;
+  height: 18px;
+  color: var(--ac-boardroom-accent-strong);
+}
+
+@media (hover: hover) {
+  .ac-overview-destinations__list a:hover {
+    background: var(--ac-boardroom-accent-50);
+    color: var(--ac-boardroom-accent-ink);
+  }
+}
+
+@media (max-width: 720px) {
+  .ac-overview-destinations__list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ac-overview-destinations__list a {
+    min-height: 52px;
+  }
+}
+</style>

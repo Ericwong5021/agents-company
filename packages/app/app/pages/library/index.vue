@@ -303,15 +303,12 @@ function clearSearch() {
     </template>
 
     <template #body>
-      <div class="ac-workspace-page">
-        <header class="ac-workspace-header">
-          <div>
-            <p class="ac-workspace-eyebrow">持久化资料与成果</p>
-            <h1 class="ac-workspace-title">成果库</h1>
-            <p class="ac-workspace-lede">
-              原始资料、解析状态与可验证交付都保存在本地服务。
-            </p>
-          </div>
+      <ModuleWorkspace
+        eyebrow="持久化资料与成果"
+        title="成果库"
+        description="原始资料、解析状态与可验证交付都保存在本地服务。"
+      >
+        <template #actions>
           <UButton
             v-if="activeTab === 'commons'"
             color="neutral"
@@ -321,7 +318,7 @@ function clearSearch() {
           >
             导入资料
           </UButton>
-        </header>
+        </template>
 
         <div class="ac-work-toolbar">
           <div class="ac-work-tabs" role="tablist" aria-label="成果库视图">
@@ -755,7 +752,7 @@ function clearSearch() {
             </div>
           </section>
         </template>
-      </div>
+      </ModuleWorkspace>
     </template>
   </UDashboardPanel>
 </template>

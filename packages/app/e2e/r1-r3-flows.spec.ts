@@ -20,7 +20,7 @@ async function setControlPlaneMode(request: APIRequestContext, mode: string, res
 async function screenshotFromTop(page: Page, path: string) {
   await page.evaluate(() => {
     document.scrollingElement?.scrollTo(0, 0)
-    document.querySelector(".ac-shell-workspace")?.scrollTo(0, 0)
+    document.querySelector(".ac-workspace-stage__main")?.scrollTo(0, 0)
   })
   await page.screenshot({ path, fullPage: true })
 }

@@ -50,7 +50,7 @@ async function setControlPlaneMode(request: APIRequestContext, mode: string, res
 async function screenshotFromTop(page: Page, path: string) {
   await page.evaluate(() => {
     document.scrollingElement?.scrollTo(0, 0)
-    document.querySelector(".ac-shell-workspace")?.scrollTo(0, 0)
+    document.querySelector(".ac-workspace-stage__main")?.scrollTo(0, 0)
   })
   await page.screenshot({ path, fullPage: true })
 }
@@ -319,6 +319,7 @@ test("@r0-shell renders shared work and evidence projections without raw status"
   page,
   request,
 }, testInfo) => {
+  test.slow()
   await enterWorkspace(page, "/work")
   await page.goto("/work?group=all")
   await expect(page.getByRole("link", { name: /准备本地发布/ })).toBeVisible()
@@ -343,7 +344,8 @@ test("@r0-shell renders shared work and evidence projections without raw status"
   await expect(page.getByRole("link", { name: /恢复未知工作/ })).toContainText("查看诊断")
 
   await page.goto("/work/project-running")
-  await expect(page.getByRole("heading", { level: 1, name: "1 / 3 项工作已完成" })).toBeVisible()
+  await expect(page.getByRole("heading", { level: 1, name: "准备本地发布" })).toBeVisible()
+  await expect(page.getByText("1 / 3 项工作已完成", { exact: true })).toBeVisible()
   await expect(page.getByText("33%")).toBeVisible()
   await expect(page.locator("body")).not.toContainText(forbiddenProductTerms)
   await screenshotFromTop(page, testInfo.outputPath("work-detail.png"))
@@ -351,8 +353,10 @@ test("@r0-shell renders shared work and evidence projections without raw status"
   await page.goto("/work/project-unavailable")
   await expect(page.getByRole("heading", { level: 1, name: "恢复未知工作" })).toBeVisible()
   await expect(page.getByLabel("高信号工作流").getByText("状态不可用")).toBeVisible()
-  await page.getByLabel("上下文面板").getByRole("tab", { name: "诊断" }).click()
-  await expect(page.getByLabel("上下文面板").getByText("缺少决定当前状态所需的事实。")).toBeVisible()
+  await page.locator('.ac-app-titlebar__status[data-connection="ready"]').waitFor({ state: "attached" })
+  await page.getByRole("button", { name: "查看诊断" }).click()
+  await expect(page.locator(".ac-context-pane").getByRole("tab", { name: "诊断" })).toHaveAttribute("aria-selected", "true")
+  await expect(page.locator(".ac-context-pane").getByText("缺少决定当前状态所需的事实。")).toBeVisible()
   await expect(page.locator(".ac-progress")).toHaveCount(0)
   await expect(page.getByRole("heading", { name: /交付/ })).toHaveCount(0)
   await expect(page.locator("body")).not.toContainText(forbiddenProductTerms)
@@ -390,11 +394,13 @@ test("@r0-shell shows a read-only goal brief and approval gate without mutation 
   page,
   request,
 }, testInfo) => {
+  test.slow()
   await enterWorkspace(page, "/work/project-gate")
-  await expect(page.getByRole("heading", { level: 1, name: "团队需要你的决定" })).toBeVisible()
-  await expect(page.getByTitle("发布候选版本")).toBeVisible()
+  await expect(page.getByRole("heading", { level: 1, name: "发布候选版本" })).toBeVisible()
   await expect(page.getByLabel("高信号工作流").getByText("等待审批", { exact: true })).toBeVisible()
-  const goalPanel = page.getByLabel("上下文面板")
+  await page.locator('.ac-app-titlebar__status[data-connection="ready"]').waitFor({ state: "attached" })
+  await page.getByRole("button", { name: "打开会话详情" }).last().click()
+  const goalPanel = page.locator(".ac-context-pane")
   await expect(goalPanel.getByRole("tab", { name: "目标" })).toHaveAttribute("aria-selected", "true")
   await expect(goalPanel.getByText("用户确认", { exact: true })).toBeVisible()
   await expect(goalPanel.getByRole("definition").filter({ hasText: "2" })).toBeVisible()
@@ -410,6 +416,8 @@ test("@r0-shell shows a read-only goal brief and approval gate without mutation 
   await screenshotFromTop(page, testInfo.outputPath("goal-brief-gate.png"))
 
   await page.goto("/work/project-blocked")
+  await page.locator('.ac-app-titlebar__status[data-connection="ready"]').waitFor({ state: "attached" })
+  await page.getByRole("button", { name: "打开会话详情" }).last().click()
   await expect(goalPanel.getByRole("tab", { name: "目标" })).toBeVisible()
   await expect(goalPanel.getByRole("definition").filter({ hasText: "旧项目范围" })).toBeVisible()
   await goalPanel.getByText("约束", { exact: true }).click()
@@ -418,6 +426,8 @@ test("@r0-shell shows a read-only goal brief and approval gate without mutation 
 
   await setControlPlaneMode(request, "brief-invalid")
   await page.goto("/work/project-gate")
+  await page.locator('.ac-app-titlebar__status[data-connection="ready"]').waitFor({ state: "attached" })
+  await page.getByRole("button", { name: "打开会话详情" }).last().click()
   await expect(page.getByRole("heading", { level: 3, name: "目标摘要暂时不可用" })).toBeVisible()
   await expect(page.getByRole("button", { name: "重新读取" })).toBeVisible()
 })

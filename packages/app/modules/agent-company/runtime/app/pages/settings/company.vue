@@ -793,12 +793,12 @@ async function saveApprovalPolicy() {
     </template>
 
     <template #body>
-      <div class="company-settings-page">
-        <header class="company-settings-page__header">
-          <h1>设置</h1>
-          <p>管理本地运行连接与 Agent Company 使用的模型服务。</p>
-        </header>
-
+      <ModuleWorkspace
+        eyebrow="本地运行与治理"
+        title="设置"
+        description="管理本地运行连接、模型服务与公司治理边界。"
+        narrow
+      >
         <div class="company-settings-stack">
           <section class="company-settings-section">
             <div class="company-settings-section__heading">
@@ -1117,7 +1117,7 @@ async function saveApprovalPolicy() {
                   <h3 class="text-xs font-semibold text-highlighted">今日代理决定</h3>
                   <span class="ac-studio-status">{{ founderControl?.todayDelegatedDecisions.length ?? 0 }}</span>
                 </div>
-                <div v-if="founderControl?.todayDelegatedDecisions.length" class="ac-founder-studio-list">
+                <div v-if="founderControl?.todayDelegatedDecisions.length" class="ac-governance-list">
                   <article
                     v-for="decision in founderControl.todayDelegatedDecisions.slice(0, 5)"
                     :key="decision.id"
@@ -1138,7 +1138,7 @@ async function saveApprovalPolicy() {
                   <h3 class="text-xs font-semibold text-highlighted">黄灯摘要</h3>
                   <span class="ac-studio-status">{{ founderControl?.yellowSummaries.length ?? 0 }}</span>
                 </div>
-                <div v-if="founderControl?.yellowSummaries.length" class="ac-founder-studio-list">
+                <div v-if="founderControl?.yellowSummaries.length" class="ac-governance-list">
                   <article
                     v-for="summary in founderControl.yellowSummaries.slice(0, 5)"
                     :key="summary.runId"
@@ -1163,7 +1163,7 @@ async function saveApprovalPolicy() {
                   <h3 class="text-xs font-semibold text-highlighted">红灯待办</h3>
                   <span class="ac-studio-status">{{ founderControl?.redPendingDecisions.length ?? 0 }}</span>
                 </div>
-                <div v-if="founderControl?.redPendingDecisions.length" class="ac-founder-studio-list">
+                <div v-if="founderControl?.redPendingDecisions.length" class="ac-governance-list">
                   <article
                     v-for="decision in founderControl.redPendingDecisions.slice(0, 5)"
                     :key="decision.id"
@@ -1184,7 +1184,7 @@ async function saveApprovalPolicy() {
                   <h3 class="text-xs font-semibold text-highlighted">推翻记录</h3>
                   <span class="ac-studio-status">{{ founderControl?.overrideRecords.length ?? 0 }}</span>
                 </div>
-                <div v-if="founderControl?.overrideRecords.length" class="ac-founder-studio-list">
+                <div v-if="founderControl?.overrideRecords.length" class="ac-governance-list">
                   <article
                     v-for="record in founderControl.overrideRecords.slice(0, 5)"
                     :key="record.id"
@@ -1454,7 +1454,7 @@ async function saveApprovalPolicy() {
                   </div>
                 </div>
 
-                <div v-if="studioAssets.length" class="ac-founder-studio-list">
+                <div v-if="studioAssets.length" class="ac-governance-list">
                   <article
                     v-for="asset in studioAssets"
                     :id="`asset-${asset.id}-${asset.version}`"
@@ -1541,7 +1541,7 @@ async function saveApprovalPolicy() {
                   </div>
                 </div>
 
-                <div v-if="founderStudio?.snapshots.length" class="ac-founder-studio-list">
+                <div v-if="founderStudio?.snapshots.length" class="ac-governance-list">
                   <article v-for="item in founderStudio.snapshots" :key="item.id">
                     <div>
                       <strong>Snapshot v{{ item.version }}</strong>
@@ -1642,7 +1642,7 @@ async function saveApprovalPolicy() {
             </div>
           </details>
         </div>
-      </div>
+      </ModuleWorkspace>
     </template>
   </UDashboardPanel>
 </template>

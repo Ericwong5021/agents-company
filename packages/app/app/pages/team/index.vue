@@ -240,17 +240,11 @@ async function retry() {
     </template>
 
     <template #body>
-      <div class="ac-workspace-page">
-        <header class="ac-workspace-header">
-          <div>
-            <p class="ac-workspace-eyebrow">团队与责任</p>
-            <h1 class="ac-workspace-title">团队</h1>
-            <p class="ac-workspace-lede">
-              查看{{ primaryWorkTitle ? `“${primaryWorkTitle}”` : "当前工作" }}的责任分配与当前状态证据。
-              <template v-if="primaryWorkID">工作 #{{ primaryWorkID.slice(-8) }}</template>
-            </p>
-          </div>
-        </header>
+      <ModuleWorkspace
+        eyebrow="团队与责任"
+        title="团队"
+        :description="`查看${primaryWorkTitle ? `“${primaryWorkTitle}”` : '当前工作'}的责任分配与当前状态证据。${primaryWorkID ? ` 工作 #${primaryWorkID.slice(-8)}` : ''}`"
+      >
 
         <CompanyConnectionState
           v-if="!available || agentsUnavailable"
@@ -579,7 +573,7 @@ async function retry() {
             <p>当前没有可确认的成员与责任分配事实，页面不会把不可用状态显示为真实空结果。</p>
           </div>
         </section>
-      </div>
+      </ModuleWorkspace>
     </template>
   </UDashboardPanel>
 </template>

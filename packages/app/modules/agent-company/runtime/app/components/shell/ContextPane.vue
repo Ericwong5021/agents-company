@@ -1,6 +1,6 @@
 <!-- Adapted from yetone/cumora@5dbbdee under the MIT License. Reimplemented for Vue/Nuxt and AgentCompany domain models. -->
 <script setup lang="ts">
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   open?: boolean
   title: string
   subtitle?: string
@@ -13,30 +13,122 @@ withDefaults(defineProps<{
   wide: false,
 })
 
-defineEmits<{
+const emit = defineEmits<{
   close: []
 }>()
+
+const pane = ref<HTMLElement>()
+const closeButton = ref<HTMLButtonElement>()
+const overlay = ref(false)
+let previousFocus: HTMLElement | undefined
+let mediaQuery: MediaQueryList | undefined
+let wideMediaQuery: MediaQueryList | undefined
+
+function updateOverlay() {
+  overlay.value = (mediaQuery?.matches ?? false) || (props.wide && (wideMediaQuery?.matches ?? false))
+}
+
+function restoreFocus() {
+  previousFocus?.focus()
+  previousFocus = undefined
+}
+
+function focusPane() {
+  nextTick(() => closeButton.value?.focus())
+}
+
+function close() {
+  emit("close")
+}
+
+function onKeydown(event: KeyboardEvent) {
+  if (event.key === "Escape") {
+    event.preventDefault()
+    close()
+    return
+  }
+  if (event.key !== "Tab" || !overlay.value || !pane.value) return
+  const focusable = [...pane.value.querySelectorAll<HTMLElement>(
+    "a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
+  )].filter(element => !element.hasAttribute("hidden"))
+  if (!focusable.length) {
+    event.preventDefault()
+    pane.value.focus()
+    return
+  }
+  const first = focusable[0]
+  const last = focusable.at(-1)
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault()
+    last?.focus()
+  }
+  if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first?.focus()
+  }
+}
+
+watch(() => props.open, open => {
+  if (open) {
+    previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : undefined
+    focusPane()
+    return
+  }
+  restoreFocus()
+})
+
+watch(() => props.wide, updateOverlay)
+
+onMounted(() => {
+  mediaQuery = window.matchMedia("(max-width: 1180px)")
+  wideMediaQuery = window.matchMedia("(max-width: 1360px)")
+  updateOverlay()
+  mediaQuery.addEventListener("change", updateOverlay)
+  wideMediaQuery.addEventListener("change", updateOverlay)
+  if (props.open) {
+    previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : undefined
+    focusPane()
+  }
+})
+
+onBeforeUnmount(() => {
+  mediaQuery?.removeEventListener("change", updateOverlay)
+  wideMediaQuery?.removeEventListener("change", updateOverlay)
+  restoreFocus()
+})
 </script>
 
 <template>
   <Teleport to="body" :disabled="!open">
-    <button v-if="open" type="button" class="ac-context-pane__scrim" aria-label="关闭上下文" @click="$emit('close')" />
+    <button v-if="open" type="button" class="ac-context-pane__scrim" :data-wide="wide || undefined" aria-label="关闭上下文" @click="close" />
   </Teleport>
-  <aside v-if="open" class="ac-context-pane ac-motion-rise" :data-wide="wide || undefined" :aria-label="title">
-    <header class="ac-context-pane__header">
-      <span><UIcon :name="icon" /></span>
-      <div>
-        <strong>{{ title }}</strong>
-        <small v-if="subtitle">{{ subtitle }}</small>
-      </div>
-      <button type="button" aria-label="关闭上下文" @click="$emit('close')">
-        <UIcon name="i-lucide-x" />
-      </button>
-    </header>
-    <AppScrollArea class="ac-context-pane__body">
-      <slot />
-    </AppScrollArea>
-  </aside>
+  <Teleport to="body" :disabled="!overlay">
+    <aside
+      v-if="open"
+      ref="pane"
+      class="ac-context-pane ac-motion-rise"
+      :data-wide="wide || undefined"
+      :aria-label="title"
+      :aria-modal="overlay || undefined"
+      :role="overlay ? 'dialog' : 'complementary'"
+      tabindex="-1"
+      @keydown="onKeydown"
+    >
+      <header class="ac-context-pane__header">
+        <span><UIcon :name="icon" /></span>
+        <div>
+          <strong>{{ title }}</strong>
+          <small v-if="subtitle">{{ subtitle }}</small>
+        </div>
+        <button ref="closeButton" type="button" aria-label="关闭上下文" @click="close">
+          <UIcon name="i-lucide-x" />
+        </button>
+      </header>
+      <AppScrollArea class="ac-context-pane__body">
+        <slot />
+      </AppScrollArea>
+    </aside>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -135,13 +227,33 @@ defineEmits<{
   }
 }
 
+@media (max-width: 1360px) {
+  .ac-context-pane[data-wide] {
+    position: fixed;
+    z-index: 91;
+    top: 68px;
+    right: 24px;
+    bottom: 24px;
+    width: min(640px, calc(100vw - 28px));
+    box-shadow: var(--ac-boardroom-shadow-dialog);
+  }
+
+  .ac-context-pane__scrim[data-wide] {
+    position: fixed;
+    z-index: 90;
+    inset: 68px 24px 24px;
+    display: block;
+    background: var(--ac-boardroom-overlay);
+  }
+}
+
 @media (max-width: 1180px) {
   .ac-context-pane {
     position: fixed;
     z-index: 91;
-    top: 44px;
-    right: 0;
-    bottom: 0;
+    top: 68px;
+    right: 24px;
+    bottom: 24px;
     width: min(420px, calc(100vw - 28px));
     box-shadow: var(--ac-boardroom-shadow-dialog);
   }
@@ -153,7 +265,7 @@ defineEmits<{
   .ac-context-pane__scrim {
     position: fixed;
     z-index: 90;
-    inset: 44px 0 0;
+    inset: 68px 24px 24px;
     display: block;
     background: var(--ac-boardroom-overlay);
   }
@@ -163,6 +275,8 @@ defineEmits<{
   .ac-context-pane,
   .ac-context-pane[data-wide] {
     top: 0;
+    right: 0;
+    bottom: 0;
     width: 100%;
   }
 

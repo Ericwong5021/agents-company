@@ -80,6 +80,8 @@ const tone = computed(() => props.event.kind === "human" ? "coral" : props.event
 .ac-boardroom-message {
   position: relative;
   display: grid;
+  contain-intrinsic-block-size: auto 76px;
+  content-visibility: auto;
   grid-template-columns: 36px minmax(0, 1fr);
   gap: 11px;
   border-radius: var(--ac-boardroom-radius-sm);
@@ -124,16 +126,27 @@ const tone = computed(() => props.event.kind === "human" ? "coral" : props.event
 }
 
 .ac-boardroom-message__quote {
+  position: relative;
   display: grid;
   max-width: 520px;
   margin-top: 6px;
   border: 0;
-  border-left: 2px solid var(--ac-boardroom-accent-300);
-  padding: 4px 9px;
+  padding: 4px 9px 4px 15px;
   background: transparent;
   color: var(--ac-boardroom-ink-500);
   cursor: pointer;
   text-align: left;
+}
+
+.ac-boardroom-message__quote::before {
+  position: absolute;
+  top: 9px;
+  left: 3px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--ac-boardroom-accent-300);
+  content: "";
 }
 
 .ac-boardroom-message__quote strong { color: var(--ac-boardroom-accent-ink); font-size: 10.5px; }

@@ -743,15 +743,12 @@ async function startGoalBrief(brief: GoalBrief) {
     </template>
 
     <template #body>
-      <div class="ac-workspace-page">
-        <header class="ac-workspace-header">
-          <div>
-            <p class="ac-workspace-eyebrow">待处理队列</p>
-            <h1 class="ac-workspace-title">收件箱</h1>
-            <p class="ac-workspace-lede">
-              需要你处理的决定、阻塞与交付会集中出现在这里。
-            </p>
-          </div>
+      <ModuleWorkspace
+        eyebrow="待处理队列"
+        title="收件箱"
+        description="需要你处理的决定、阻塞与交付会集中出现在这里。"
+      >
+        <template #actions>
           <div class="flex items-center gap-2">
             <UButton
               v-if="available && snapshot.company.providerConfigured !== false"
@@ -771,7 +768,7 @@ async function startGoalBrief(brief: GoalBrief) {
               @click="refreshInbox"
             />
           </div>
-        </header>
+        </template>
 
         <div v-if="streamStatus === 'degraded'" class="ac-stream-degraded" role="status">
           <span>实时更新已降级；待处理列表可能需要手动校准。</span>
@@ -1389,7 +1386,7 @@ async function startGoalBrief(brief: GoalBrief) {
             </UButton>
           </div>
         </section>
-      </div>
+      </ModuleWorkspace>
     </template>
   </UDashboardPanel>
 </template>

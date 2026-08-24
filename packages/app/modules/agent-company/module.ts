@@ -76,8 +76,8 @@ export default defineNuxtModule<AgentCompanyModuleOptions>({
       filePath: resolver.resolve("./runtime/app/components/shell/ContextPane.vue"),
     })
     addComponent({
-      name: "CompanyModuleNav",
-      filePath: resolver.resolve("./runtime/app/components/CompanyModuleNav.vue"),
+      name: "ModuleWorkspace",
+      filePath: resolver.resolve("./runtime/app/components/shell/ModuleWorkspace.vue"),
     })
     addComponent({
       name: "CompanyConnectionState",
@@ -94,10 +94,6 @@ export default defineNuxtModule<AgentCompanyModuleOptions>({
     addComponent({
       name: "DemoWorkspace",
       filePath: resolver.resolve("./runtime/app/components/DemoWorkspace.vue"),
-    })
-    addComponent({
-      name: "CompanyComposer",
-      filePath: resolver.resolve("./runtime/app/components/CompanyComposer.vue"),
     })
     addImports({
       name: "useCompanySnapshot",
