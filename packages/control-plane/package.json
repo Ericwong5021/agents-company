@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "version": "0.1.5-beta.7",
+  "version": "0.1.5-beta.8",
   "name": "@agents-company/control-plane",
   "description": "Local Control Plane and headless CLI for Agent Company",
   "type": "module",
