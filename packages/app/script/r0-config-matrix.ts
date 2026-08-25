@@ -274,6 +274,8 @@ async function runScenario(
         const page = await context.newPage()
         const loginResponse = page.waitForResponse((response) => {
           return response.url().endsWith("/api/auth/local") && response.request().method() === "POST"
+        }, { timeout: 45_000 }).catch((error) => {
+          throw new Error(`${error.message}\nWebUI output:\n${webui.output()}`)
         })
         await page.goto("/login")
         const loginStatus = (await loginResponse).status()

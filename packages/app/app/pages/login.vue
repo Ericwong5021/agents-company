@@ -24,7 +24,7 @@ async function enterLocalCompany() {
   const result = await $fetch("/api/auth/local", {
     method: "POST",
     retry: 0,
-    signal: AbortSignal.timeout(8_000),
+    signal: AbortSignal.timeout(30_000),
   })
     .then(() => true)
     .catch(() => false)
