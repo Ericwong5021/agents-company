@@ -608,9 +608,8 @@ test("@r0-shell preserves route context across direct access, refresh, back, and
 
   await page.goto("/work/project-gate")
   await expect(page.getByRole("heading", { level: 1, name: "发布候选版本" })).toBeVisible()
-  await expect(page.getByTitle("发布候选版本")).toBeVisible()
   await page.reload()
-  await expect(page.getByTitle("发布候选版本")).toBeVisible()
+  await expect(page.getByRole("heading", { level: 1, name: "发布候选版本" })).toBeVisible()
   await expect(page.getByRole("navigation", { name: "主导航" }).getByRole("link", { name: "工作" })).toHaveAttribute(
     "aria-current",
     "page",

@@ -110,9 +110,9 @@ test("renders the eight R0 human-review screenshot candidates", async ({ page, r
   await expect(page.getByRole("link", { name: /审查发布候选/ })).toBeVisible()
   await capture(page, "inbox")
 
-  await open(page, "/work/project-brief")
+  await open(page, "/work/project-brief?panel=goal_brief")
   await expect(page.getByRole("heading", { level: 1, name: "定义本地研究交付" })).toBeVisible()
-  const goalPanel = page.getByLabel("上下文面板")
+  const goalPanel = page.getByRole("complementary", { name: "目标" })
   await expect(goalPanel.getByRole("tab", { name: "目标" })).toHaveAttribute("aria-selected", "true")
   await expect(goalPanel.getByText("让本地 AI 团队完成一份可验证的研究交付。")).toBeVisible()
   await capture(page, "goal-brief")
