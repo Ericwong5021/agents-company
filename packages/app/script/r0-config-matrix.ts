@@ -19,7 +19,7 @@ const navigation = [
   { label: "运营日志", route: "/company/operations", heading: "运营中心" },
   { label: "团队", route: "/team" },
   { label: "成果库", route: "/library" },
-  { label: "设置", route: "/settings" },
+  { label: "设置", route: "/settings", heading: "公司" },
 ] as const
 const legacyRoutes = [
   { from: "/company", to: "/company" },
@@ -28,8 +28,8 @@ const legacyRoutes = [
   { from: "/company/projects/legacy", to: "/work/legacy" },
   { from: "/chat", to: "/work" },
   { from: "/chat/legacy", to: "/work" },
-  { from: "/settings/profile", to: "/settings" },
-  { from: "/settings/integrations", to: "/settings" },
+  { from: "/settings/profile", to: "/settings/profile" },
+  { from: "/settings/integrations", to: "/settings/integrations" },
   { from: "/settings/company", to: "/settings" },
 ] as const
 const deferredRoutes = ["/life", "/ambient", "/dreaming", "/agent-home", "/departments", "/office"] as const
