@@ -1,5 +1,5 @@
 import { Agent, type AgentEvent, type AgentMessage, type AgentTool } from "@earendil-works/pi-agent-core"
-import type { Model } from "@earendil-works/pi-ai"
+import type { AssistantMessageEvent, Model } from "@earendil-works/pi-ai"
 import type { AgentRunSpec } from "../interface"
 import type { PiRuntimeEngine, PiRuntimeEngineFactory, PiRuntimeEventType } from "./adapter"
 
@@ -64,13 +64,31 @@ export function createPiIdleTimer(input: {
   }
 }
 
+function assistantUpdate(event: AssistantMessageEvent): Record<string, unknown> {
+  if (event.type === "start") return { type: event.type }
+  if (event.type === "text_start" || event.type === "thinking_start" || event.type === "toolcall_start") {
+    return { type: event.type, contentIndex: event.contentIndex }
+  }
+  if (event.type === "text_delta" || event.type === "thinking_delta" || event.type === "toolcall_delta") {
+    return { type: event.type, contentIndex: event.contentIndex, delta: event.delta }
+  }
+  if (event.type === "text_end" || event.type === "thinking_end") {
+    return { type: event.type, contentIndex: event.contentIndex, content: event.content }
+  }
+  if (event.type === "toolcall_end") {
+    return { type: event.type, contentIndex: event.contentIndex, toolCall: event.toolCall }
+  }
+  if (event.type === "done") return { type: event.type, reason: event.reason }
+  return { type: event.type, reason: event.reason, errorMessage: event.error.errorMessage }
+}
+
 function payload(event: AgentEvent): Record<string, unknown> {
   if (event.type === "agent_start" || event.type === "turn_start") return {}
   if (event.type === "agent_end") return { messageCount: event.messages.length }
   if (event.type === "turn_end") return { message: event.message, toolResults: event.toolResults }
-  if (event.type === "message_start" || event.type === "message_update" || event.type === "message_end") {
-    return { message: event.message }
-  }
+  if (event.type === "message_start") return { phase: "start", role: event.message.role }
+  if (event.type === "message_update") return { phase: "update", update: assistantUpdate(event.assistantMessageEvent) }
+  if (event.type === "message_end") return { phase: "end", message: event.message }
   return {
     toolCallID: event.toolCallId,
     toolName: event.toolName,
@@ -139,6 +157,7 @@ class CorePiRuntimeEngine implements PiRuntimeEngine {
     const idle = createPiIdleTimer({ timeoutMs: this.idleTimeoutMs, abort: () => this.agent.abort() })
     const unsubscribe = this.agent.subscribe((event) => {
       idle.event(event)
+      if (event.type === "message_start" || event.type === "tool_execution_update") return
       onEvent(eventType(event), payload(event))
     })
     idle.start()
