@@ -992,6 +992,7 @@ flowchart LR
 
 - 实现 Inbox、Work、Team、Library、Settings 五个一级入口。
 - 每个入口拥有稳定路由、页面标题、面包屑或上下文标题以及直接访问能力。
+- Settings 按公司、个人与记忆、集成拆分为 `/settings`、`/settings/profile`、`/settings/integrations`，三个分类均可直接访问，不相互重定向。
 - 全局连接状态、当前工作区和用户级设置放入稳定位置，不与业务卡片混杂。
 - 支持键盘导航、焦点可见和刷新后恢复当前页面。
 

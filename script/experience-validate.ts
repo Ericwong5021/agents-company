@@ -807,14 +807,19 @@ check(
     '{ from: "/company/projects/legacy", to: "/work/legacy" }',
     '{ from: "/chat", to: "/work" }',
     '{ from: "/chat/legacy", to: "/work" }',
-    '{ from: "/settings/profile", to: "/settings" }',
-    '{ from: "/settings/integrations", to: "/settings" }',
     '{ from: "/settings/company", to: "/settings" }',
   ].every((route) => shellE2E.includes(route)) &&
-    shellE2E.includes('test("@r0-shell redirects every legacy entry without a loop"') &&
+    [
+      '{ path: "/settings", heading: "公司" }',
+      '{ path: "/settings/profile", heading: "个人与记忆" }',
+      '{ path: "/settings/integrations", heading: "集成" }',
+    ].every((route) => shellE2E.includes(route)) &&
+    shellE2E.includes('test("@r0-shell keeps legacy aliases and settings routes loop-free"') &&
     shellE2E.includes("await page.goto(route.from)") &&
-    /await expect\(page\)\.toHaveURL\(\(?url\)? => url\.pathname === route\.to\)/.test(shellE2E),
-  "Legacy route redirects are missing executable E2E coverage.",
+    /await expect\(page\)\.toHaveURL\(\(?url\)? => url\.pathname === route\.to\)/.test(shellE2E) &&
+    shellE2E.includes("await page.goto(route.path)") &&
+    /await expect\(page\)\.toHaveURL\(\(?url\)? => url\.pathname === route\.path\)/.test(shellE2E),
+  "Legacy aliases or stable settings routes are missing executable E2E coverage.",
 )
 
 const scenarioIDs = benchmark.scenarios.map((scenario) => scenario.id)
