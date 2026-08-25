@@ -28,7 +28,7 @@ async function handleCopyPrompt() {
   }
   catch {
     toast.add({
-      title: "Could not copy prompt",
+      title: "提示词复制失败",
       color: "error",
     });
   }
@@ -48,18 +48,18 @@ async function handleImport() {
     emit("imported", result.created.length);
     toast.add({
       title: result.created.length
-        ? `Added ${result.created.length} memory ${result.created.length === 1 ? "entry" : "entries"}`
-        : "Nothing new to add",
+        ? `已导入 ${result.created.length} 条记忆`
+        : "没有新的记忆",
       description: result.skipped.length
-        ? `${result.skipped.length} section(s) were already stored.`
+        ? `${result.skipped.length} 项已存在`
         : undefined,
       color: result.created.length ? "success" : "neutral",
     });
   }
   catch (error) {
     toast.add({
-      title: "Import failed",
-      description: error instanceof Error ? error.message : "Try again.",
+      title: "导入失败",
+      description: error instanceof Error ? error.message : "请重试",
       color: "error",
     });
   }
@@ -80,7 +80,7 @@ defineShortcuts({
 <template>
   <UModal
     v-model:open="open"
-    title="Import Memory"
+    title="导入记忆"
     :ui="{
       content: 'w-[calc(100vw-2rem)] max-w-2xl',
       body: 'space-y-4 px-5 py-4 sm:px-6',
@@ -95,26 +95,22 @@ defineShortcuts({
         :icon="copied ? 'i-lucide-check' : 'i-lucide-copy'"
         @click="handleCopyPrompt"
       >
-        {{ copied ? "Copied" : "Copy Prompt" }}
+        {{ copied ? "已复制" : "复制导出提示词" }}
       </UButton>
     </template>
 
     <template #body>
       <ol class="list-decimal space-y-1.5 ps-5 text-sm leading-relaxed text-toned marker:text-dimmed">
-        <li>Click the "Copy Prompt" button</li>
-        <li>Go to your AI provider, and paste it into a new chat</li>
-        <li>Paste the response below and add it to your V memory</li>
+        <li>复制导出提示词</li>
+        <li>发送给原来的 AI 服务</li>
+        <li>把返回内容粘贴到下方</li>
       </ol>
-
-      <p class="text-xs leading-relaxed text-dimmed">
-        Importing memory is additive. You can do it for all your other AI providers.
-      </p>
 
       <UTextarea
         v-model="raw"
         class="w-full"
         :rows="8"
-        placeholder="Paste your memory export here..."
+        placeholder="粘贴记忆导出内容"
       />
     </template>
 
@@ -124,7 +120,7 @@ defineShortcuts({
         variant="ghost"
         @click="() => { open = false }"
       >
-        Cancel
+        取消
       </UButton>
 
       <UButton
@@ -133,7 +129,7 @@ defineShortcuts({
         :loading="importing"
         @click="handleImport"
       >
-        Add to Memory
+        导入
         <span class="ms-2 inline-flex items-center gap-0.5 opacity-80">
           <UKbd
             value="meta"

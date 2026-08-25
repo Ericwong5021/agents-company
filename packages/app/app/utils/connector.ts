@@ -10,21 +10,21 @@ export function getFetchErrorMessage(error: unknown) {
   if (error instanceof Error) {
     return error.message;
   }
-  return "Something went wrong";
+  return "操作失败";
 }
 
 export function connectorStatusLabel(state: ConnectorState) {
   switch (state) {
     case "connected":
-      return { label: "Connected", color: "success" as const };
+      return { label: "已连接", color: "success" as const };
     case "installation_required":
-      return { label: "Install required", color: "warning" as const };
+      return { label: "需要安装", color: "warning" as const };
     case "setup_required":
-      return { label: "Setup required", color: "warning" as const };
+      return { label: "需要配置", color: "warning" as const };
     case "error":
-      return { label: "Error", color: "error" as const };
+      return { label: "异常", color: "error" as const };
     default:
-      return { label: "Not connected", color: "neutral" as const };
+      return { label: "未连接", color: "neutral" as const };
   }
 }
 
@@ -48,12 +48,12 @@ export function parseTestResult(line: string): ParsedTestResult {
 
 export function testResultsHeading(connectorId: string) {
   if (connectorId === "linear") {
-    return "Issues";
+    return "Issue";
   }
   if (connectorId === "github") {
-    return "Repositories";
+    return "仓库";
   }
-  return "Results";
+  return "结果";
 }
 
 const CONNECTION_ICONS: Record<string, string> = {

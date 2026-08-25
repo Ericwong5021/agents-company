@@ -11,7 +11,7 @@ const navigation = [
   { label: "董事会", heading: "董事会", path: "/company/board" },
   { label: "团队", heading: "团队", path: "/team" },
   { label: "成果库", heading: "成果库", path: "/library" },
-  { label: "设置", heading: "设置", path: "/settings" },
+  { label: "设置", heading: "公司", path: "/settings" },
 ] as const
 const forbiddenProductTerms = /投影诊断|Projection diagnostics/i
 
@@ -22,9 +22,12 @@ const legacyRoutes = [
   { from: "/company/projects/legacy", to: "/work/legacy" },
   { from: "/chat", to: "/work" },
   { from: "/chat/legacy", to: "/work" },
-  { from: "/settings/profile", to: "/settings" },
-  { from: "/settings/integrations", to: "/settings" },
   { from: "/settings/company", to: "/settings" },
+] as const
+const settingsRoutes = [
+  { path: "/settings", heading: "公司" },
+  { path: "/settings/profile", heading: "个人与记忆" },
+  { path: "/settings/integrations", heading: "集成" },
 ] as const
 
 async function enterWorkspace(page: Page, path = "/inbox") {
@@ -584,12 +587,18 @@ test("@r0-shell generates an unbound Goal Brief and retries structured failure i
   ])
 })
 
-test("@r0-shell redirects every legacy entry without a loop", async ({ page }) => {
+test("@r0-shell keeps legacy aliases and settings routes loop-free", async ({ page }) => {
   await enterWorkspace(page)
 
   for (const route of legacyRoutes) {
     await page.goto(route.from)
     await expect(page).toHaveURL((url) => url.pathname === route.to)
+  }
+
+  for (const route of settingsRoutes) {
+    await page.goto(route.path)
+    await expect(page).toHaveURL((url) => url.pathname === route.path)
+    await expect(page.getByRole("heading", { level: 1, name: route.heading })).toBeVisible()
   }
 })
 

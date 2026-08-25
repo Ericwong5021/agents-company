@@ -67,7 +67,7 @@ watch(localNumber, emitModel);
       :items="PHONE_CODES"
       value-key="code"
       :search-input="{
-        placeholder: 'Search country…',
+        placeholder: '搜索国家或地区',
         icon: 'i-lucide-search',
       }"
       :filter-fields="['name', 'code', 'dialCode']"

@@ -22,11 +22,11 @@ export interface MemoryEntry {
 export type MemoryByCategory = Record<MemoryCategory, MemoryEntry[]>;
 
 export const MEMORY_CATEGORY_LABELS: Record<MemoryCategory, string> = {
-  work_context: "Work Context",
-  personal_context: "Personal Context",
-  active_focus: "Active Focus",
-  instructions_preferences: "Instructions & Preferences",
-  project_history: "Project History",
+  work_context: "工作背景",
+  personal_context: "个人信息",
+  active_focus: "当前重点",
+  instructions_preferences: "偏好与要求",
+  project_history: "项目经历",
 };
 
 export const MEMORY_CATEGORY_HEADERS: Record<MemoryCategory, string[]> = {

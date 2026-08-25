@@ -54,13 +54,15 @@ try {
     ["inbox", "/inbox", "收件箱"],
     ["team", "/team", "团队"],
     ["library", "/library", "成果库"],
-    ["settings", "/settings", "设置"],
+    ["settings-company", "/settings", "公司"],
+    ["settings-profile", "/settings/profile", "个人与记忆"],
+    ["settings-integrations", "/settings/integrations", "集成"],
   ] as const satisfies readonly Scenario[]
   const viewports = [
     ["desktop-1440", 1440, 900],
     ["desktop-1280", 1280, 800],
     ["tablet-1024", 1024, 768],
-    ["mobile-390", 390, 844],
+    ["mobile-375", 375, 812],
   ] as const satisfies readonly Viewport[]
   const metrics: Record<string, Record<string, Awaited<ReturnType<typeof capture>>>> = {}
   for (const [name, width, height] of viewports) {

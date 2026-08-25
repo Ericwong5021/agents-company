@@ -4,7 +4,6 @@ import { computed, onMounted, reactive, ref, watch } from "vue"
 import type {
   FounderAdvisorReadiness,
   FounderCalibrationItem,
-  FounderControlCenterProjection,
   FounderOSModeState,
   FounderStudioProjection,
   GovernanceAsset,
@@ -33,24 +32,13 @@ import {
 const { data: snapshot, pending, refresh } = useCompanySnapshot()
 const productTelemetry = useProductTelemetry()
 const telemetryMessage = ref("")
-const telemetryRates = computed(() => [
-  { label: "交付到达率", value: productTelemetry.metrics.value.deliveryReachRate },
-  { label: "打断率", value: productTelemetry.metrics.value.interruptionRate },
-  { label: "失败恢复率", value: productTelemetry.metrics.value.recoveryRate },
-  { label: "验收率", value: productTelemetry.metrics.value.acceptanceRate },
-])
-const telemetryBreakdownGroups = computed(() => [
-  { label: "版本", rows: productTelemetry.breakdowns.value.byVersion },
-  { label: "场景", rows: productTelemetry.breakdowns.value.byScenario },
-  { label: "批准模式", rows: productTelemetry.breakdowns.value.byApprovalMode },
-])
 
 function updateTelemetryConsent(event: Event) {
   const enabled = (event.currentTarget as HTMLInputElement).checked
   productTelemetry.setConsent(enabled)
   telemetryMessage.value = enabled
-    ? "已选择加入匿名体验数据；只有配置了接收端时才会发送脱敏事件。"
-    : "匿名体验数据已关闭；本地指标仍继续工作。"
+    ? "匿名体验数据已开启。"
+    : "匿名体验数据已关闭。"
 }
 
 function exportTelemetry() {
@@ -69,13 +57,6 @@ function clearTelemetry() {
   telemetryMessage.value = "本地体验数据已清除；匿名上报选择未改变。"
 }
 
-const connectionLabel = computed(() => ({
-  connecting: "正在连接",
-  ready: "已连接",
-  degraded: "部分可用",
-  disconnected: "未连接",
-  recovering: "正在恢复",
-})[snapshot.value.connection])
 const savedProviderLabel = computed(() =>
   snapshot.value.company.providerConfigured === false
     ? "未配置"
@@ -134,26 +115,24 @@ const approvalOptions = [
   {
     value: "autonomous" as const,
     label: "自主",
-    detail: "目标摘要生成后自动开始；高风险动作仍等待你的明确批准。",
+    detail: "自动开始",
   },
   {
     value: "balanced" as const,
     label: "平衡",
-    detail: "先展示目标摘要，允许你调整后再开始。",
+    detail: "确认目标后开始",
   },
   {
     value: "strict" as const,
     label: "严格",
-    detail: "等待你明确开始；工作区写入也需要逐项批准。",
+    detail: "逐项批准",
   },
 ]
 const onboarding = ref<OnboardingState>(parseOnboardingState(null))
 const founderStudio = ref<FounderStudioProjection | null>(null)
-const founderControl = ref<FounderControlCenterProjection | null>(null)
 const founderModes = ref<FounderOSModeState | null>(null)
 const advisorReadiness = ref<FounderAdvisorReadiness | null>(null)
 const studioLoading = ref(false)
-const controlLoading = ref(false)
 const modeLoading = ref(false)
 const advisorLoading = ref(false)
 const studioMessage = ref("")
@@ -225,7 +204,6 @@ const advisorDraft = reactive({
 onMounted(() => {
   onboarding.value = parseOnboardingState(window.localStorage.getItem(onboardingStorageKey))
   loadFounderStudio()
-  loadFounderControl()
   loadFounderModes()
   loadAdvisorReadiness()
 })
@@ -247,36 +225,6 @@ async function loadFounderStudio() {
   if (!snapshotDraft.profileSummary && founderStudio.value?.snapshots[0]?.profileSummary)
     snapshotDraft.profileSummary = founderStudio.value.snapshots[0].profileSummary
   studioLoading.value = false
-}
-
-async function loadFounderControl() {
-  if (!snapshot.value.company.id || controlLoading.value) return
-  controlLoading.value = true
-  founderControl.value = await $fetch<FounderControlCenterProjection>("/api/agent-company/founder-control-center", {
-    query: { companyId: snapshot.value.company.id },
-  }).catch(() => null)
-  controlLoading.value = false
-}
-
-function founderDecisionTitle(
-  decision: FounderControlCenterProjection["todayDelegatedDecisions"][number],
-) {
-  return decision.subject ?? decision.finalDecision ?? decision.recommendation ?? decision.id
-}
-
-function founderDecisionSummary(
-  decision: FounderControlCenterProjection["todayDelegatedDecisions"][number],
-) {
-  return decision.finalDecision ?? decision.recommendation ?? decision.context ?? "尚无决定摘要"
-}
-
-function founderControlTime(timestamp: number) {
-  return new Intl.DateTimeFormat("zh-CN", {
-    month: "numeric",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(timestamp)
 }
 
 async function loadFounderModes() {
@@ -347,7 +295,7 @@ async function confirmAdvisorReadiness() {
     },
   )
   advisorLoading.value = false
-  await Promise.all([loadFounderModes(), loadFounderControl()])
+  await loadFounderModes()
 }
 
 async function saveFounderModes() {
@@ -368,7 +316,6 @@ async function saveFounderModes() {
     },
   )
   modeLoading.value = false
-  await loadFounderControl()
 }
 
 async function createAssetDraft() {
@@ -615,7 +562,6 @@ async function selectStudioSnapshot(snapshotId: string) {
 watch(() => snapshot.value.company.id, (companyId) => {
   if (!companyId) return
   loadFounderStudio()
-  loadFounderControl()
   loadFounderModes()
   loadAdvisorReadiness()
 })
@@ -794,43 +740,22 @@ async function saveApprovalPolicy() {
 
     <template #body>
       <ModuleWorkspace
-        eyebrow="本地运行与治理"
-        title="设置"
-        description="管理本地运行连接、模型服务与公司治理边界。"
+        eyebrow="设置"
+        title="公司"
+        description=""
         narrow
       >
+        <template #actions>
+          <UButton
+            color="neutral"
+            variant="ghost"
+            icon="i-lucide-refresh-cw"
+            aria-label="刷新本地运行状态"
+            :loading="pending"
+            @click="refresh()"
+          />
+        </template>
         <div class="company-settings-stack">
-          <section class="company-settings-section">
-            <div class="company-settings-section__heading">
-              <div>
-                <h2>本地运行</h2>
-                <p>连接本机服务并读取当前公司的真实配置。</p>
-              </div>
-              <UButton
-                color="neutral"
-                variant="ghost"
-                icon="i-lucide-refresh-cw"
-                aria-label="刷新本地运行状态"
-                :loading="pending"
-                @click="refresh()"
-              />
-            </div>
-            <dl>
-              <div>
-                <dt>连接</dt>
-                <dd>{{ connectionLabel }}</dd>
-              </div>
-              <div>
-                <dt>公司</dt>
-                <dd>{{ snapshot.company.name }}</dd>
-              </div>
-              <div>
-                <dt>模型服务</dt>
-                <dd>{{ savedProviderLabel }}</dd>
-              </div>
-            </dl>
-          </section>
-
           <CompanyConnectionState
             v-if="snapshot.connection !== 'ready' && snapshot.connection !== 'degraded'"
             :connection="snapshot.connection"
@@ -839,97 +764,12 @@ async function saveApprovalPolicy() {
             @retry="refresh()"
           />
 
-          <section class="company-settings-section">
-            <div class="company-settings-section__heading">
-              <div>
-                <h2>目标批准策略</h2>
-                <p>决定未来目标何时开始。策略变更不会改写已启动项目或已等待的批准审批。</p>
-              </div>
-            </div>
-            <div class="ac-provider-presets" role="radiogroup" aria-label="目标批准策略">
-              <button
-                v-for="option in approvalOptions"
-                :key="option.value"
-                type="button"
-                role="radio"
-                class="ac-provider-preset"
-                :aria-checked="approvalPreset === option.value"
-                :data-active="approvalPreset === option.value"
-                @click="approvalPreset = option.value"
-              >
-                <span class="ac-provider-preset__label">{{ option.label }}</span>
-                <span class="ac-provider-preset__desc">{{ option.detail }}</span>
-              </button>
-            </div>
-            <div class="company-provider-form__actions">
-              <span v-if="approvalMessage" role="status">{{ approvalMessage }}</span>
-              <span v-else>当前保存策略：{{ snapshot.company.approvalPolicy }}</span>
-              <UButton color="neutral" :loading="approvalSaving" @click="saveApprovalPolicy">保存批准策略</UButton>
-            </div>
-          </section>
-
-          <section class="company-settings-section">
-            <div class="company-settings-section__heading">
-              <div>
-                <h2>本地体验数据</h2>
-                <p>指标默认只保存在本机，用于判断目标到交付、打断、失败恢复和验收闭环。</p>
-              </div>
-              <span>口径 v{{ productTelemetry.metrics.value.definitionVersion }}</span>
-            </div>
-            <div class="ac-telemetry-metrics">
-              <div v-for="metric in telemetryRates" :key="metric.label">
-                <span>{{ metric.label }}</span>
-                <strong>{{ Math.round(metric.value * 100) }}%</strong>
-              </div>
-              <div>
-                <span>本地事件</span>
-                <strong>{{ productTelemetry.events.value.length }}</strong>
-              </div>
-            </div>
-            <label class="ac-telemetry-consent">
-              <input
-                type="checkbox"
-                :checked="productTelemetry.consent.value.enabled"
-                @change="updateTelemetryConsent"
-              >
-              <span>
-                <strong>选择加入匿名体验数据</strong>
-                <small>不发送 API Key、完整 Prompt、文件内容或成果正文；未配置接收端时不会产生外部请求。</small>
-              </span>
-            </label>
-            <details v-if="productTelemetry.events.value.length" class="ac-telemetry-breakdowns">
-              <summary>按版本、场景与批准模式比较</summary>
-              <section v-for="group in telemetryBreakdownGroups" :key="group.label">
-                <h3>{{ group.label }}</h3>
-                <div v-if="group.rows.length" class="ac-telemetry-breakdowns__rows">
-                  <div v-for="row in group.rows" :key="row.key">
-                    <strong>{{ row.key }}</strong>
-                    <span>{{ row.eventCount }} 个事件</span>
-                    <span>交付到达 {{ Math.round(row.metrics.deliveryReachRate * 100) }}%</span>
-                    <span>验收 {{ Math.round(row.metrics.acceptanceRate * 100) }}%</span>
-                  </div>
-                </div>
-                <p v-else>当前事件尚未包含该维度。</p>
-              </section>
-            </details>
-            <div class="company-provider-form__actions">
-              <span v-if="telemetryMessage" role="status">{{ telemetryMessage }}</span>
-              <span v-else>你可以随时查看、导出或清除本机记录。</span>
-              <UButton color="neutral" variant="outline" :disabled="!productTelemetry.events.value.length" @click="exportTelemetry">
-                导出数据
-              </UButton>
-              <UButton color="neutral" variant="ghost" :disabled="!productTelemetry.events.value.length" @click="clearTelemetry">
-                清除数据
-              </UButton>
-            </div>
-          </section>
-
           <section class="company-settings-section company-provider-form ac-provider-wizard">
             <div class="company-settings-section__heading">
               <div>
                 <h2>模型服务</h2>
-                <p>下方用于配置或替换模型连接。已保存密钥不会回填；不更换配置时无需重新输入。</p>
               </div>
+              <span>{{ savedProviderLabel }}</span>
             </div>
 
             <div class="ac-provider-presets" role="radiogroup" aria-label="选择模型服务">
@@ -944,7 +784,6 @@ async function saveApprovalPolicy() {
                 @click="selectPreset(option.id)"
               >
                 <span class="ac-provider-preset__label">{{ option.label }}</span>
-                <span class="ac-provider-preset__desc">{{ option.description }}</span>
               </button>
             </div>
 
@@ -1030,7 +869,7 @@ async function saveApprovalPolicy() {
             </p>
 
             <div class="company-provider-form__actions">
-              <span>当前：{{ savedProviderLabel }} · 此处不会显示已保存密钥</span>
+              <span>已保存的密钥不会显示</span>
               <UButton color="neutral" :loading="saving" :disabled="!selectedModel" @click="saveProvider">
                 验证并保存
               </UButton>
@@ -1040,207 +879,77 @@ async function saveApprovalPolicy() {
           <section class="company-settings-section">
             <div class="company-settings-section__heading">
               <div>
+                <h2>工作审批</h2>
+              </div>
+            </div>
+            <div class="ac-provider-presets" role="radiogroup" aria-label="目标批准策略">
+              <button
+                v-for="option in approvalOptions"
+                :key="option.value"
+                type="button"
+                role="radio"
+                class="ac-provider-preset"
+                :aria-checked="approvalPreset === option.value"
+                :data-active="approvalPreset === option.value"
+                @click="approvalPreset = option.value"
+              >
+                <span class="ac-provider-preset__label">{{ option.label }}</span>
+                <span class="ac-provider-preset__desc">{{ option.detail }}</span>
+              </button>
+            </div>
+            <div class="company-provider-form__actions">
+              <span v-if="approvalMessage" role="status">{{ approvalMessage }}</span>
+              <span v-else>当前：{{ snapshot.company.approvalPolicy }}</span>
+              <UButton color="neutral" :loading="approvalSaving" @click="saveApprovalPolicy">保存</UButton>
+            </div>
+          </section>
+
+          <section class="company-settings-section">
+            <div class="company-settings-section__heading">
+              <div>
+                <h2>体验数据</h2>
+              </div>
+            </div>
+            <label class="ac-telemetry-consent">
+              <input
+                type="checkbox"
+                :checked="productTelemetry.consent.value.enabled"
+                @change="updateTelemetryConsent"
+              >
+              <span>
+                <strong>发送匿名体验数据</strong>
+                <small>不包含密钥、Prompt、文件或成果正文</small>
+              </span>
+            </label>
+            <div class="company-provider-form__actions">
+              <span v-if="telemetryMessage" role="status">{{ telemetryMessage }}</span>
+              <span v-else>{{ productTelemetry.events.value.length }} 条本地记录</span>
+              <UButton color="neutral" variant="outline" :disabled="!productTelemetry.events.value.length" @click="exportTelemetry">
+                导出数据
+              </UButton>
+              <UButton color="neutral" variant="ghost" :disabled="!productTelemetry.events.value.length" @click="clearTelemetry">
+                清除数据
+              </UButton>
+            </div>
+          </section>
+
+          <section class="company-settings-section">
+            <div class="company-settings-section__heading">
+              <div>
                 <h2>引导与演示</h2>
-                <p>随时重新开始首次引导，或进入明确标注的演示；演示与真实数据、模型服务、项目完全隔离。</p>
               </div>
             </div>
             <div class="ac-onboarding-controls">
               <UButton color="neutral" variant="soft" @click="restartGuide">重新开始引导</UButton>
               <UButton color="neutral" variant="outline" @click="enterDemo">进入演示</UButton>
             </div>
-            <p class="company-provider-form__message">重新开始引导会清除本机的演示与引导标记，不影响任何真实公司数据。</p>
           </section>
 
           <details>
             <summary class="company-settings-section cursor-pointer">
               <strong class="block text-sm text-highlighted">高级治理与创始人代理</strong>
-              <span class="mt-2 block text-sm text-muted">
-                默认收起。日常使用无需处理；仅在你要配置创始人代理、治理资产或校准时展开。
-              </span>
             </summary>
             <div class="mt-5 grid gap-5">
-          <section class="company-settings-section">
-            <div class="company-settings-section__heading">
-              <div>
-                <h2>创始人代理控制台（高级）</h2>
-                <p>只读显示代理模式、待办与校准趋势；未获授权时不能在这里提高模式。</p>
-              </div>
-              <UButton
-                color="neutral"
-                variant="ghost"
-                icon="i-lucide-refresh-cw"
-                aria-label="刷新 Founder Control Center"
-                :loading="controlLoading"
-                @click="loadFounderControl"
-              />
-            </div>
-
-            <p class="company-provider-form__message">
-              {{ founderControl?.principal.displayName ?? "AI 大东 · 创始人代理" }}
-              · 授权 {{ governanceStatusLabel(founderControl?.authorization.status) }}
-              · 模式提升 {{ founderControl?.authorization.canRaiseModeFromUI ? "可用" : "已禁用" }}
-            </p>
-
-            <dl>
-              <div>
-                <dt>当前有效模式</dt>
-                <dd>{{ founderModeLabel(founderControl?.mode.effective.founderTwinMode) }}</dd>
-              </div>
-              <div>
-                <dt>今日代理决定</dt>
-                <dd>{{ founderControl?.todayDelegatedDecisions.length ?? 0 }}</dd>
-              </div>
-              <div>
-                <dt>最近黄灯摘要</dt>
-                <dd>{{ founderControl?.yellowSummaries.length ?? 0 }}</dd>
-              </div>
-              <div>
-                <dt>红灯待办</dt>
-                <dd>{{ founderControl?.redPendingDecisions.length ?? 0 }}</dd>
-              </div>
-              <div>
-                <dt>最近推翻记录</dt>
-                <dd>{{ founderControl?.overrideRecords.length ?? 0 }}</dd>
-              </div>
-              <div>
-                <dt>校准进度</dt>
-                <dd>
-                  {{ founderControl?.calibrationTrend.responded ?? 0 }}
-                  / {{ (founderControl?.calibrationTrend.responded ?? 0) + (founderControl?.calibrationTrend.pending ?? 0) }}
-                </dd>
-              </div>
-            </dl>
-
-            <div class="mt-5 grid gap-x-6 gap-y-5 lg:grid-cols-2">
-              <div class="min-w-0 border-t border-default pt-4">
-                <div class="flex items-center justify-between gap-3">
-                  <h3 class="text-xs font-semibold text-highlighted">今日代理决定</h3>
-                  <span class="ac-studio-status">{{ founderControl?.todayDelegatedDecisions.length ?? 0 }}</span>
-                </div>
-                <div v-if="founderControl?.todayDelegatedDecisions.length" class="ac-governance-list">
-                  <article
-                    v-for="decision in founderControl.todayDelegatedDecisions.slice(0, 5)"
-                    :key="decision.id"
-                  >
-                    <div>
-                      <strong>{{ founderDecisionTitle(decision) }}</strong>
-                      <span>{{ decision.authorityClass ?? "未分类" }} · {{ decision.currentStatus }}</span>
-                    </div>
-                    <p>{{ founderDecisionSummary(decision) }}</p>
-                    <small>{{ founderControlTime(decision.createdAt) }}</small>
-                  </article>
-                </div>
-                <p v-else class="company-provider-form__message">今天尚无创始人代理决定。</p>
-              </div>
-
-              <div class="min-w-0 border-t border-default pt-4">
-                <div class="flex items-center justify-between gap-3">
-                  <h3 class="text-xs font-semibold text-highlighted">黄灯摘要</h3>
-                  <span class="ac-studio-status">{{ founderControl?.yellowSummaries.length ?? 0 }}</span>
-                </div>
-                <div v-if="founderControl?.yellowSummaries.length" class="ac-governance-list">
-                  <article
-                    v-for="summary in founderControl.yellowSummaries.slice(0, 5)"
-                    :key="summary.runId"
-                  >
-                    <div>
-                      <strong>{{ summary.status }}</strong>
-                      <span>{{ summary.cost.actual }} / {{ summary.cost.limit }} receipt</span>
-                    </div>
-                    <p>
-                      {{ summary.failClosedReasons.length
-                        ? summary.failClosedReasons.join("；")
-                        : `${summary.workItemIds.length} 个工作项，${summary.outcomeIds.length} 个 Outcome` }}
-                    </p>
-                    <small>{{ founderControlTime(summary.updatedAt) }}</small>
-                  </article>
-                </div>
-                <p v-else class="company-provider-form__message">尚无黄灯执行摘要。</p>
-              </div>
-
-              <div class="min-w-0 border-t border-default pt-4">
-                <div class="flex items-center justify-between gap-3">
-                  <h3 class="text-xs font-semibold text-highlighted">红灯待办</h3>
-                  <span class="ac-studio-status">{{ founderControl?.redPendingDecisions.length ?? 0 }}</span>
-                </div>
-                <div v-if="founderControl?.redPendingDecisions.length" class="ac-governance-list">
-                  <article
-                    v-for="decision in founderControl.redPendingDecisions.slice(0, 5)"
-                    :key="decision.id"
-                  >
-                    <div>
-                      <strong>{{ founderDecisionTitle(decision) }}</strong>
-                      <span>{{ decision.currentStatus }}</span>
-                    </div>
-                    <p>{{ founderDecisionSummary(decision) }}</p>
-                    <small>{{ founderControlTime(decision.createdAt) }}</small>
-                  </article>
-                </div>
-                <p v-else class="company-provider-form__message">当前没有待处理红灯决定。</p>
-              </div>
-
-              <div class="min-w-0 border-t border-default pt-4">
-                <div class="flex items-center justify-between gap-3">
-                  <h3 class="text-xs font-semibold text-highlighted">推翻记录</h3>
-                  <span class="ac-studio-status">{{ founderControl?.overrideRecords.length ?? 0 }}</span>
-                </div>
-                <div v-if="founderControl?.overrideRecords.length" class="ac-governance-list">
-                  <article
-                    v-for="record in founderControl.overrideRecords.slice(0, 5)"
-                    :key="record.id"
-                  >
-                    <div>
-                      <strong>{{ record.humanDecision }}</strong>
-                      <span>{{ record.actorId }}</span>
-                    </div>
-                    <p>{{ record.reason }}</p>
-                    <small>{{ founderControlTime(record.createdAt) }}</small>
-                  </article>
-                </div>
-                <p v-else class="company-provider-form__message">尚无人工推翻记录。</p>
-              </div>
-
-              <div class="min-w-0 border-t border-default pt-4 lg:col-span-2">
-                <div class="flex items-center justify-between gap-3">
-                  <h3 class="text-xs font-semibold text-highlighted">校准趋势</h3>
-                  <span class="ac-studio-status">
-                    {{ founderControl?.trends.confirmedCalibrations ?? 0 }} confirmed
-                  </span>
-                </div>
-                <dl>
-                  <div>
-                    <dt>待校准</dt>
-                    <dd>{{ founderControl?.calibrationTrend.pending ?? 0 }}</dd>
-                  </div>
-                  <div>
-                    <dt>已回应</dt>
-                    <dd>{{ founderControl?.calibrationTrend.responded ?? 0 }}</dd>
-                  </div>
-                  <div>
-                    <dt>接受 / 拒绝</dt>
-                    <dd>
-                      {{ founderControl?.calibrationTrend.accepted ?? 0 }}
-                      / {{ founderControl?.calibrationTrend.rejected ?? 0 }}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>A/B 偏好</dt>
-                    <dd>{{ founderControl?.calibrationTrend.preferences ?? 0 }}</dd>
-                  </div>
-                  <div>
-                    <dt>影子建议匹配 / 推翻</dt>
-                    <dd>
-                      {{ founderControl?.trends.shadowComparisons ?? 0 }}
-                      / {{ founderControl?.trends.shadowOverrides ?? 0 }}
-                    </dd>
-                  </div>
-                </dl>
-              </div>
-            </div>
-
-            <NuxtLink to="/company/board" class="company-text-link mt-5 inline-block">打开董事会治理承载面</NuxtLink>
-          </section>
-
           <section class="company-settings-section">
             <div class="company-settings-section__heading">
               <div>

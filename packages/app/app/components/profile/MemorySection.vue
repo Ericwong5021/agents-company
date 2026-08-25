@@ -28,6 +28,7 @@ const toast = useToast();
 
 const PREVIEW_LENGTH = 100;
 const COLLAPSED_CONTENT_LINES = 4;
+const sourceLabels = { import: "导入", agent: "Agent", manual: "手动" } as const;
 
 const hasMemory = computed(() =>
   MEMORY_CATEGORIES.some(category => (props.memory?.[category]?.length ?? 0) > 0),
@@ -76,10 +77,10 @@ async function handleDelete(entry: MemoryEntry) {
   deletingId.value = entry.id;
   try {
     await deleteEntry(entry.id);
-    toast.add({ title: "Memory entry removed", color: "neutral" });
+    toast.add({ title: "记忆已删除", color: "neutral" });
   }
   catch {
-    toast.add({ title: "Could not delete entry", color: "error" });
+    toast.add({ title: "记忆删除失败", color: "error" });
   }
   finally {
     deletingId.value = null;
@@ -106,11 +107,11 @@ async function handleSaveEdit() {
   savingEdit.value = true;
   try {
     await updateEntry(entry.id, content);
-    toast.add({ title: "Memory updated", color: "neutral" });
+    toast.add({ title: "记忆已更新", color: "neutral" });
     closeEdit();
   }
   catch {
-    toast.add({ title: "Could not update entry", color: "error" });
+    toast.add({ title: "记忆更新失败", color: "error" });
   }
   finally {
     savingEdit.value = false;
@@ -121,8 +122,7 @@ async function handleSaveEdit() {
 <template>
   <section>
     <SettingsSection
-      title="Memory"
-      description="Long-term context V uses across web, Slack, and iMessage."
+      title="记忆"
     >
       <template
         v-if="hasMemory && !pending"
@@ -135,7 +135,7 @@ async function handleSaveEdit() {
           icon="i-lucide-download"
           @click="() => { importOpen = true }"
         >
-          Import
+          导入
         </UButton>
       </template>
 
@@ -158,10 +158,7 @@ async function handleSaveEdit() {
           class="mx-auto mb-3 size-7 text-dimmed"
         />
         <p class="text-sm text-muted">
-          No memory yet.
-        </p>
-        <p class="mt-1 text-xs text-dimmed">
-          Import from ChatGPT or let V suggest saving preferences in chat.
+          暂无记忆
         </p>
         <UButton
           class="mt-4"
@@ -171,7 +168,7 @@ async function handleSaveEdit() {
           icon="i-lucide-download"
           @click="() => { importOpen = true }"
         >
-          Import Memory
+          导入记忆
         </UButton>
       </div>
 
@@ -227,7 +224,7 @@ async function handleSaveEdit() {
                 <div class="mt-2 flex items-center gap-2">
                   <p class="text-[11px] text-dimmed">
                     {{ formatMemoryDate(entriesFor(category)[0]!.createdAt) }}
-                    · {{ entriesFor(category)[0]!.source }}
+                    · {{ sourceLabels[entriesFor(category)[0]!.source] }}
                   </p>
 
                   <UButton
@@ -238,7 +235,7 @@ async function handleSaveEdit() {
                     class="h-auto px-0 py-0 text-[11px]"
                     @click.stop="toggleEntry(entriesFor(category)[0]!.id)"
                   >
-                    {{ isEntryExpanded(entriesFor(category)[0]!.id) ? "Less" : "More" }}
+                    {{ isEntryExpanded(entriesFor(category)[0]!.id) ? "收起" : "展开" }}
                   </UButton>
 
                   <UButton
@@ -247,7 +244,7 @@ async function handleSaveEdit() {
                     size="xs"
                     icon="i-lucide-pencil"
                     class="ms-auto h-auto px-0 py-0 text-[11px] opacity-0 transition-opacity group-hover:opacity-100"
-                    aria-label="Edit memory entry"
+                    aria-label="编辑记忆"
                     @click.stop="openEdit(entriesFor(category)[0]!)"
                   />
 
@@ -258,7 +255,7 @@ async function handleSaveEdit() {
                     icon="i-lucide-trash-2"
                     class="h-auto px-0 py-0 text-[11px] opacity-0 transition-opacity group-hover:opacity-100"
                     :loading="deletingId === entriesFor(category)[0]!.id"
-                    aria-label="Delete memory entry"
+                    aria-label="删除记忆"
                     @click.stop="handleDelete(entriesFor(category)[0]!)"
                   />
                 </div>
@@ -273,7 +270,7 @@ async function handleSaveEdit() {
 
     <UModal
       :open="editingEntry !== null"
-      title="Edit memory"
+      title="编辑记忆"
       :ui="{ footer: 'justify-end gap-2' }"
       @update:open="(value) => { if (!value) closeEdit(); }"
     >
@@ -283,7 +280,7 @@ async function handleSaveEdit() {
           :rows="8"
           autoresize
           class="w-full"
-          placeholder="Memory content"
+          placeholder="记忆内容"
         />
       </template>
 
@@ -293,7 +290,7 @@ async function handleSaveEdit() {
           variant="ghost"
           @click="closeEdit"
         >
-          Cancel
+          取消
         </UButton>
         <UButton
           color="neutral"
@@ -301,7 +298,7 @@ async function handleSaveEdit() {
           :disabled="!editContent.trim()"
           @click="handleSaveEdit"
         >
-          Save
+          保存
         </UButton>
       </template>
     </UModal>

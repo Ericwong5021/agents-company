@@ -9,7 +9,7 @@ export const connectors: ConnectorDef[] = [
   {
     id: "github",
     name: "GitHub",
-    description: "Repositories, issues, pull requests, and CI workflows.",
+    description: "仓库、Issue、Pull Request 和 CI",
     connector: GITHUB_CONNECTOR,
     connectionName: "github",
     icon: "i-simple-icons-github",
@@ -37,7 +37,7 @@ export const connectors: ConnectorDef[] = [
   {
     id: "linear",
     name: "Linear",
-    description: "Issues, projects, cycles, and comments in your Linear workspace.",
+    description: "Issue、项目、周期和评论",
     connector: "mcp.linear.app/linear",
     connectionName: "linear",
     icon: "i-simple-icons-linear",

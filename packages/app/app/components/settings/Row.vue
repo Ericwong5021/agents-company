@@ -9,8 +9,8 @@ defineProps<{
 
 <template>
   <div
-    class="px-4 py-3"
-    :class="inline ? 'flex items-center justify-between gap-4' : undefined"
+    class="px-1 py-4 sm:px-2"
+    :class="inline ? 'flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6' : undefined"
   >
     <div
       class="min-w-0"
@@ -30,7 +30,7 @@ defineProps<{
     <div
       v-if="$slots.default"
       class="min-w-0"
-      :class="inline ? 'shrink-0' : 'w-full'"
+      :class="inline ? 'w-full sm:w-auto sm:shrink-0' : 'w-full'"
     >
       <slot />
       <p

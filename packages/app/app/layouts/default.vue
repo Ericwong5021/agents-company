@@ -155,7 +155,7 @@ const contextSubtitle = computed(() => {
   if (route.path.startsWith("/team")) return "在线状态与当前负载"
   if (route.path.startsWith("/library")) return "成果、知识与版本"
   if (route.path.startsWith("/inbox")) return `${attentionCount.value} 项需要关注`
-  if (route.path.startsWith("/settings")) return "公司、个人与集成"
+  if (route.path.startsWith("/settings")) return "选择一个类别"
   return "本地 AI 公司"
 })
 const contextSections = computed<AppShellContextSection[]>(() => {
@@ -210,10 +210,10 @@ const contextSections = computed<AppShellContextSection[]>(() => {
     { id: "interpretations", label: "材料解读", to: "/library/interpretations", description: "来源、解释与证据", icon: "i-lucide-book-open-text", active: route.path.startsWith("/library/interpretations") },
     { id: "patches", label: "能力补丁", to: "/library/patches", description: "学习产生的变更", icon: "i-lucide-git-pull-request-arrow", active: route.path.startsWith("/library/patches") },
   ] }]
-  if (route.path.startsWith("/settings")) return [{ id: "settings-views", label: "配置", items: [
-    { id: "company-settings", label: "公司设置", to: "/settings", description: "模型、审批与本地运行", icon: "i-lucide-building-cog", active: route.path === "/settings" || route.path === "/settings/company", tone: "accent" },
-    { id: "profile-settings", label: "个人与记忆", to: "/settings/profile", description: "个人资料和持久记忆", icon: "i-lucide-user-round-cog", active: route.path.startsWith("/settings/profile") },
-    { id: "integration-settings", label: "集成", to: "/settings/integrations", description: "外部服务连接", icon: "i-lucide-unplug", active: route.path.startsWith("/settings/integrations") },
+  if (route.path.startsWith("/settings")) return [{ id: "settings-views", label: "设置", items: [
+    { id: "company-settings", label: "公司", to: "/settings", icon: "i-lucide-building-2", active: route.path === "/settings" || route.path === "/settings/company", tone: "accent" },
+    { id: "profile-settings", label: "个人与记忆", to: "/settings/profile", icon: "i-lucide-user-round-cog", active: route.path.startsWith("/settings/profile") },
+    { id: "integration-settings", label: "集成", to: "/settings/integrations", icon: "i-lucide-unplug", active: route.path.startsWith("/settings/integrations") },
   ] }]
   if (route.path.startsWith("/inbox")) return [{ id: "inbox-attention", label: "需要你处理", items: attentionItems.value.map(attentionItem), emptyLabel: "当前没有待处理事项" }]
   return [
@@ -249,7 +249,7 @@ useHead(() => ({ title: pageTitle.value }))
         </AppRail>
         <button v-if="sidebarOpen" type="button" class="ac-app-shell__scrim" aria-label="关闭当前模块导航" @click="closeSidebar" />
         <AppResizablePane v-model="sidebarWidth" class="ac-app-shell__sidebar" :data-open="sidebarOpen" :min="240" :max="520" :step="16" label="调整当前模块导航宽度">
-          <ContextSidebar :title="contextTitle" :subtitle="contextSubtitle" :sections="contextSections" :open="sidebarOpen" :connection="windowConnection" :connection-label="windowConnectionLabel" @close="closeSidebar" />
+          <ContextSidebar :title="contextTitle" :subtitle="contextSubtitle" :sections="contextSections" :searchable="!route.path.startsWith('/settings')" :open="sidebarOpen" :connection="windowConnection" :connection-label="windowConnectionLabel" @close="closeSidebar" />
         </AppResizablePane>
         <WorkspaceStage><slot /></WorkspaceStage>
       </div>

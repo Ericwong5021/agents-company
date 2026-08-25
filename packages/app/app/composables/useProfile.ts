@@ -6,8 +6,9 @@ interface ProfileResponse {
 }
 
 const LOCALES = [
+  { value: "zh-CN", label: "简体中文", description: "zh-CN" },
   { value: "en", label: "English", description: "en" },
-  { value: "fr", label: "French", description: "fr" },
+  { value: "fr", label: "Français", description: "fr" },
 ];
 
 export function useProfile() {

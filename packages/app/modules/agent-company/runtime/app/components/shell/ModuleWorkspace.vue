@@ -2,10 +2,11 @@
 withDefaults(defineProps<{
   eyebrow: string
   title: string
-  description: string
+  description?: string
   narrow?: boolean
 }>(), {
   narrow: false,
+  description: "",
 })
 </script>
 
@@ -15,7 +16,7 @@ withDefaults(defineProps<{
       <div>
         <p class="ac-module-workspace__eyebrow">{{ eyebrow }}</p>
         <h1>{{ title }}</h1>
-        <p class="ac-module-workspace__description">{{ description }}</p>
+        <p v-if="description" class="ac-module-workspace__description">{{ description }}</p>
       </div>
       <div v-if="$slots.actions" class="ac-module-workspace__actions">
         <slot name="actions" />

@@ -94,7 +94,7 @@ const statusDotClass = computed(() => {
           trailing-icon="i-lucide-arrow-up-right"
           @click="connect"
         >
-          Connect
+          连接
         </UButton>
 
         <template v-if="isConnected">
@@ -104,7 +104,7 @@ const statusDotClass = computed(() => {
             size="xs"
             icon="i-lucide-play"
             :loading="testing"
-            aria-label="Test connection"
+          aria-label="测试连接"
             @click="test"
           />
           <UButton
@@ -112,7 +112,7 @@ const statusDotClass = computed(() => {
             variant="ghost"
             size="xs"
             icon="i-lucide-unplug"
-            aria-label="Disconnect"
+          aria-label="断开连接"
             @click="() => { showRevokeModal = true }"
           />
         </template>
@@ -159,7 +159,7 @@ const statusDotClass = computed(() => {
       <div class="overflow-hidden rounded-md border border-default">
         <div class="flex items-center justify-between border-b border-default px-2.5 py-1.5">
           <p class="text-[10px] font-medium tracking-wide text-dimmed uppercase">
-            {{ parsedResults.length }} {{ resultsHeading.toLowerCase() }}
+            {{ parsedResults.length }} 个{{ resultsHeading }}
           </p>
           <UButton
             color="neutral"
@@ -192,8 +192,7 @@ const statusDotClass = computed(() => {
 
     <UModal
       v-model:open="showRevokeModal"
-      :title="`Disconnect ${connector.name}?`"
-      description="V will lose access until you connect again."
+      :title="`断开 ${connector.name}？`"
     >
       <template #footer>
         <UButton
@@ -201,7 +200,7 @@ const statusDotClass = computed(() => {
           variant="ghost"
           @click="() => { showRevokeModal = false }"
         >
-          Cancel
+          取消
         </UButton>
         <UButton
           color="error"
@@ -209,7 +208,7 @@ const statusDotClass = computed(() => {
           :loading="revoking"
           @click="revoke"
         >
-          Disconnect
+          断开连接
         </UButton>
       </template>
     </UModal>

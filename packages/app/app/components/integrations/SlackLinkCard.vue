@@ -20,7 +20,7 @@ const expiresLabel = computed(() => {
   }
 
   const minutes = Math.max(1, Math.round((new Date(expiresAt).getTime() - Date.now()) / 60_000));
-  return `Expires in ${minutes} min`;
+  return `${minutes} 分钟后失效`;
 });
 
 async function onUnlink() {
@@ -74,7 +74,7 @@ async function copyCode() {
                 ? 'bg-emerald-400/90'
                 : 'bg-toned'"
             />
-            {{ isLinked ? "Linked" : "Not linked" }}
+            {{ isLinked ? "已连接" : "未连接" }}
           </span>
         </div>
         <p class="truncate text-xs text-muted">
@@ -86,7 +86,7 @@ async function copyCode() {
             > · @{{ slackLink.userName }}</span>
           </template>
           <template v-else>
-            Uses your profile and service connections in Slack.
+            在 Slack 中使用 Agent Company
           </template>
         </p>
       </div>
@@ -110,7 +110,7 @@ async function copyCode() {
           :loading="generating || pending"
           @click="generateLinkCode"
         >
-          {{ pendingCode ? "New code" : "Generate code" }}
+          {{ pendingCode ? "换一个验证码" : "生成验证码" }}
         </UButton>
       </div>
     </div>
@@ -122,11 +122,11 @@ async function copyCode() {
       <ol class="space-y-2 text-xs text-muted">
         <li class="flex gap-2">
           <span class="text-dimmed">1.</span>
-          <span>In Slack, message <code class="text-toned">@V link {{ pendingCode }}</code></span>
+          <span>在 Slack 中发送 <code class="text-toned">@V link {{ pendingCode }}</code></span>
         </li>
         <li class="flex gap-2">
           <span class="text-dimmed">2.</span>
-          <span>Refresh this page once V confirms the link</span>
+          <span>确认连接后刷新本页</span>
         </li>
       </ol>
 
@@ -141,7 +141,7 @@ async function copyCode() {
           :icon="copied ? 'i-lucide-check' : 'i-lucide-copy'"
           @click="copyCode"
         >
-          {{ copied ? "Copied" : "Copy" }}
+          {{ copied ? "已复制" : "复制" }}
         </UButton>
         <span
           v-if="expiresLabel"

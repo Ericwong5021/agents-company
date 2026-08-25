@@ -7,14 +7,14 @@ defineProps<{
 
 <template>
   <section>
-    <div class="mb-3 flex items-start justify-between gap-3">
+    <div class="mb-2 flex min-h-10 items-center justify-between gap-3">
       <div class="min-w-0">
-        <h2 class="text-[10px] font-medium uppercase tracking-wider text-muted">
+        <h2 class="text-sm font-semibold text-highlighted">
           {{ title }}
         </h2>
         <p
           v-if="description"
-          class="mt-1 text-xs text-muted"
+          class="mt-0.5 text-xs text-muted"
         >
           {{ description }}
         </p>
@@ -23,7 +23,7 @@ defineProps<{
       <slot name="actions" />
     </div>
 
-    <div class="divide-y divide-default rounded-lg border border-default">
+    <div class="divide-y divide-default border-y border-default">
       <slot />
     </div>
   </section>
