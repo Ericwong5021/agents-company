@@ -3,7 +3,7 @@ set -euo pipefail
 
 repository="Ericwong5021/agents-company"
 release_download="https://github.com/$repository/releases/download"
-signer_workflow="$repository/.github/workflows/preview.yml"
+update_key_sha256="a51cfb11d2d130641b6fa5d4afa06bedf7c96ac296eae19229aaf7a3934b3c85"
 action="${1:-}"
 provider="${2:-}"
 target="${3:-}"
@@ -35,12 +35,33 @@ digest() {
   shasum -a 256 "$1" | awk '{print $1}'
 }
 
+public_key_digest() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    tr -d '\r' < "$1" | sha256sum | awk '{print $1}'
+    return
+  fi
+  tr -d '\r' < "$1" | shasum -a 256 | awk '{print $1}'
+}
+
 release_asset() {
   retry curl -fsSL --connect-timeout 15 --max-time 300 --retry 2 "$release_download/$target/$1" -o "$2"
 }
 
-verify_attestation() {
-  gh attestation verify "$1" --repo "$repository" --signer-workflow "$signer_workflow" --source-ref "refs/tags/$target" >/dev/null
+verify_release_signature() {
+  local checksums="$1"
+  local signature="$2"
+  local key="$3"
+  local work="$4"
+  [ "$(public_key_digest "$key")" = "$update_key_sha256" ] || fail "update public key mismatch"
+  if command -v node >/dev/null 2>&1; then
+    node -e 'const fs=require("fs"),crypto=require("crypto");const [checksums,key,signature]=process.argv.slice(1);process.exit(crypto.verify(null,fs.readFileSync(checksums),fs.readFileSync(key),Buffer.from(fs.readFileSync(signature,"utf8").trim(),"base64"))?0:1)' "$checksums" "$key" "$signature" || fail "release signature verification failed"
+    return
+  fi
+  need openssl
+  if ! base64 -d < "$signature" > "$work/checksums.sig.bin" 2>/dev/null; then
+    base64 -D < "$signature" > "$work/checksums.sig.bin"
+  fi
+  openssl pkeyutl -verify -pubin -inkey "$key" -rawin -in "$checksums" -sigfile "$work/checksums.sig.bin" >/dev/null || fail "release signature verification failed"
 }
 
 verify_checksum() {
@@ -85,7 +106,6 @@ deploy_vps() {
   [ "$(id -u)" -eq 0 ] || fail "VPS deployment must run with sudo"
   need curl
   need docker
-  need gh
   docker compose version >/dev/null 2>&1 || fail "Docker Compose is required"
   [[ "$target" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$ ]] || fail "invalid Preview version"
   [ -f "$directory/.env" ] || fail "$directory/.env is required"
@@ -94,13 +114,12 @@ deploy_vps() {
   local staging backup previous had_previous=0
   staging="$(mktemp -d "${TMPDIR:-/tmp}/agent-company-release.XXXXXX")"
   chmod 700 "$staging"
-  for asset in compose.yaml Caddyfile remote.env source-commit.txt selfhost.sh checksums.txt; do
+  for asset in compose.yaml Caddyfile remote.env source-commit.txt selfhost.sh checksums.txt checksums.sig update-public-key.pem; do
     release_asset "$asset" "$staging/$asset"
   done
-  verify_attestation "$staging/checksums.txt"
+  verify_release_signature "$staging/checksums.txt" "$staging/checksums.sig" "$staging/update-public-key.pem" "$staging"
   for asset in compose.yaml Caddyfile remote.env source-commit.txt selfhost.sh; do
     verify_checksum "$staging/$asset" "$staging/checksums.txt"
-    verify_attestation "$staging/$asset"
   done
   validate_remote_environment "$staging/remote.env"
   [ "$(tr -d '\r\n' < "$staging/source-commit.txt")" = "$(sed -n 's/^AGENT_COMPANY_SOURCE_COMMIT=//p' "$staging/remote.env")" ] || fail "release source commit mismatch"

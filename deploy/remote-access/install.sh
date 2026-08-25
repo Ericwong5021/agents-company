@@ -3,7 +3,7 @@ set -euo pipefail
 
 repository="Ericwong5021/agents-company"
 release_download="https://github.com/$repository/releases/download"
-signer_workflow="$repository/.github/workflows/preview.yml"
+update_key_sha256="a51cfb11d2d130641b6fa5d4afa06bedf7c96ac296eae19229aaf7a3934b3c85"
 target="${1:-}"
 install_directory="${AGENT_COMPANY_INSTALL_DIR:-$HOME/.local/bin}"
 
@@ -31,6 +31,31 @@ digest() {
     return
   fi
   shasum -a 256 "$1" | awk '{print $1}'
+}
+
+public_key_digest() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    tr -d '\r' < "$1" | sha256sum | awk '{print $1}'
+    return
+  fi
+  tr -d '\r' < "$1" | shasum -a 256 | awk '{print $1}'
+}
+
+verify_release_signature() {
+  local checksums="$1"
+  local signature="$2"
+  local key="$3"
+  local work="$4"
+  [ "$(public_key_digest "$key")" = "$update_key_sha256" ] || fail "update public key mismatch"
+  if command -v node >/dev/null 2>&1; then
+    node -e 'const fs=require("fs"),crypto=require("crypto");const [checksums,key,signature]=process.argv.slice(1);process.exit(crypto.verify(null,fs.readFileSync(checksums),fs.readFileSync(key),Buffer.from(fs.readFileSync(signature,"utf8").trim(),"base64"))?0:1)' "$checksums" "$key" "$signature" || fail "release signature verification failed"
+    return
+  fi
+  need openssl
+  if ! base64 -d < "$signature" > "$work/checksums.sig.bin" 2>/dev/null; then
+    base64 -D < "$signature" > "$work/checksums.sig.bin"
+  fi
+  openssl pkeyutl -verify -pubin -inkey "$key" -rawin -in "$checksums" -sigfile "$work/checksums.sig.bin" >/dev/null || fail "release signature verification failed"
 }
 
 release_asset() {
@@ -72,14 +97,14 @@ asset_name() {
 
 [[ "$target" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$ ]] || fail "usage: install.sh vX.Y.Z-beta.N"
 need curl
-need gh
 archive="$(asset_name)"
 work="$(mktemp -d "${TMPDIR:-/tmp}/agent-company-install.XXXXXX")"
 chmod 700 "$work"
 release_asset checksums.txt "$work/checksums.txt"
+release_asset checksums.sig "$work/checksums.sig"
+release_asset update-public-key.pem "$work/update-public-key.pem"
 release_asset "$archive" "$work/$archive"
-gh attestation verify "$work/checksums.txt" --repo "$repository" --signer-workflow "$signer_workflow" --source-ref "refs/tags/$target" >/dev/null
-gh attestation verify "$work/$archive" --repo "$repository" --signer-workflow "$signer_workflow" --source-ref "refs/tags/$target" >/dev/null
+verify_release_signature "$work/checksums.txt" "$work/checksums.sig" "$work/update-public-key.pem" "$work"
 expected="$(awk -v asset="$archive" '$2 == asset { print $1 }' "$work/checksums.txt")"
 [ -n "$expected" ] || fail "release checksum missing for $archive"
 [ "$(digest "$work/$archive")" = "$expected" ] || fail "release checksum mismatch for $archive"

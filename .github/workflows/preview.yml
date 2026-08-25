@@ -173,6 +173,10 @@ jobs:
             cat remote-images/*.env | sort
           } > release/remote.env
           (cd release && find . -maxdepth 1 -type f ! -name checksums.txt -printf '%f\n' | sort | xargs sha256sum > checksums.txt)
+      - name: Sign release checksum manifest
+        env:
+          AGENT_COMPANY_UPDATE_PRIVATE_KEY: ${{ secrets.AGENT_COMPANY_UPDATE_PRIVATE_KEY }}
+        run: node deploy/remote-access/sign-checksums.mjs release
       - uses: actions/attest-build-provenance@v2
         with:
           subject-path: release/*
