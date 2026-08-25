@@ -18,7 +18,7 @@ const connectedCount = computed(
             <IntegrationsSlackLinkCard />
           </SettingsSection>
 
-          <SettingsSection title="外部服务">
+          <SettingsSection v-if="isInitialLoad || error || connectors?.length" title="外部服务">
             <template #actions>
               <div class="flex items-center gap-2">
                 <span v-if="connectors" class="text-xs tabular-nums text-muted">{{ connectedCount }}/{{ connectors.length }} 已连接</span>
@@ -49,7 +49,6 @@ const connectedCount = computed(
                 :connector="connector"
                 @refresh="refresh()"
               />
-              <div v-if="!connectors?.length" class="px-4 py-8 text-center text-sm text-muted">暂无可用服务</div>
             </template>
           </SettingsSection>
         </div>

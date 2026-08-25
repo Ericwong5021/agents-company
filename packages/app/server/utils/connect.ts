@@ -1,6 +1,7 @@
 import type { ConnectorDef, ConnectorStatus } from "#shared/types/connector";
 import { CONNECT_USER_ISSUER } from "#shared/connect";
 import type { ConnectTokenSubject } from "@vercel/connect";
+import { getHeader, type H3Event } from "h3";
 import {
   ConnectError,
   ConnectorInstallationRequiredError,
@@ -11,6 +12,12 @@ import {
   startAuthorization,
   UserAuthorizationRequiredError,
 } from "@vercel/connect";
+
+export function isConnectAvailable(event: H3Event) {
+  return process.env.VERCEL === "1"
+    || Boolean(process.env.VERCEL_OIDC_TOKEN?.trim())
+    || Boolean(getHeader(event, "x-vercel-oidc-token"));
+}
 
 function userSubjects(userId: string): ConnectTokenSubject[] {
   const subjects: ConnectTokenSubject[] = [

@@ -599,6 +599,7 @@ test("@r0-shell keeps legacy aliases and settings routes loop-free", async ({ pa
     await page.goto(route.path)
     await expect(page).toHaveURL((url) => url.pathname === route.path)
     await expect(page.getByRole("heading", { level: 1, name: route.heading })).toBeVisible()
+    await expect(page.getByText(/x-vercel-oidc-token|vc link/)).toHaveCount(0)
   }
 })
 

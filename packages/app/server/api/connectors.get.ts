@@ -1,9 +1,12 @@
 import { connectors } from "~~/server/connectors";
-import { probeStatus } from "~~/server/utils/connect";
+import { isConnectAvailable, probeStatus } from "~~/server/utils/connect";
 import { requireSessionUserId } from "~~/server/utils/session";
 
 export default defineEventHandler(async (event) => {
   const userId = await requireSessionUserId(event);
+  if (!isConnectAvailable(event)) {
+    return [];
+  }
 
   const summaries = await Promise.all(
     connectors.map(async (connector) => {
