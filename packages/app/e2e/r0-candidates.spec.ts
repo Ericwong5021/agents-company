@@ -78,8 +78,9 @@ async function setControlPlaneMode(request: APIRequestContext, mode: string) {
 }
 
 async function open(page: Page, pathName: string, first = false) {
+  const target = new URL(pathName, "http://127.0.0.1")
   await page.goto(first ? `/login?redirect=${encodeURIComponent(pathName)}` : pathName)
-  await page.waitForURL((url) => url.pathname === pathName)
+  await page.waitForURL((url) => url.pathname === target.pathname && url.search === target.search)
   await expect(page.getByRole("navigation", { name: "主导航" })).toBeVisible()
 }
 
