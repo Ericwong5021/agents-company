@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
   "name": "@agents-company/sdk",
-  "version": "0.1.5-beta.12",
+  "version": "0.1.5-beta.13",
   "description": "TypeScript SDK for the Agent Company Local API",
   "keywords": ["agent-company", "ai", "sdk", "coding-assistant"],
   "type": "module",
