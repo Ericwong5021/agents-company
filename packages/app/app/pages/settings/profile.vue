@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { authClient } from "~/lib/auth-client";
 
+useCompanySnapshot();
 const { profile, pending, error: profileError, refresh, saveProfile, timezones, locales } = useProfile();
 const { memory, pending: memoryPending } = useMemory();
 const toast = useToast();

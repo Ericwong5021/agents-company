@@ -1,4 +1,5 @@
 <script setup lang="ts">
+useCompanySnapshot();
 const { connectors, error, refresh, isInitialLoad, pending } = useConnectors();
 const connectedCount = computed(
   () => connectors.value?.filter(connector => connector.status.state === "connected").length ?? 0,
