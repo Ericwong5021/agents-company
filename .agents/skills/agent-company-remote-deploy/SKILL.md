@@ -28,7 +28,8 @@ Do not copy commands from an older report when current release assets or source 
 - Never run `docker compose down -v`, delete deployment volumes, overwrite an existing `.env`, disable SSH host-key checking, or guess SSH credentials.
 - Keep Web session credentials, the Relay service token, Better Auth secret, and device token separate.
 - Do not put a deployed password or secret in the repository, Git history, report files, command-line arguments, or ordinary logs. Use protected temporary files and mode `0600` for secret transfer.
-- After successful acceptance, tell the owner the exact remote login password directly in the final response. Do not mask it or only place it on the clipboard.
+- Never install GitHub CLI credentials, a GitHub token, or release-bot credentials on the VPS. Public Preview assets must be independently verifiable without GitHub authentication.
+- Do not print or repeat the remote login password in the final response. Report whether the retained credential was proven by a real login.
 
 ## Select the operation
 
@@ -42,7 +43,7 @@ If a missing VPS target, domain, login email, or SSH identity would change the d
 
 1. Check the repository branch, status, HEAD, tags, and remotes. Preserve unrelated work and never reset it.
 2. Resolve the requested Preview version. If none was specified, inspect current GitHub releases and select the newest complete Preview whose workflow and assets finished successfully.
-3. Require these release assets: `checksums.txt`, `selfhost.sh`, `compose.yaml`, `Caddyfile`, `remote.env`, `source-commit.txt`, `install.sh`, and the applicable local CLI archive.
+3. Require these release assets: `checksums.txt`, `checksums.sig`, `update-public-key.pem`, `selfhost.sh`, `compose.yaml`, `Caddyfile`, `remote.env`, `source-commit.txt`, `install.sh`, and the applicable local CLI archive.
 4. Inspect the VPS through its existing trusted SSH route:
    - hostname, OS, architecture, disk space, and time;
    - Docker and Docker Compose availability;
@@ -58,7 +59,7 @@ Versions, SHAs, credentials, hostnames, ports, and connection state are time-sen
 
 ## Verify the release before execution
 
-Download bootstrap assets into a protected temporary directory. Verify GitHub build provenance with the repository and workflow fixed to:
+Download bootstrap assets into a protected temporary directory on the trusted workstation. Verify GitHub build provenance for the applicable local CLI archive with the repository and workflow fixed to:
 
 ```text
 repository: Ericwong5021/agents-company
@@ -66,7 +67,9 @@ workflow: Ericwong5021/agents-company/.github/workflows/preview.yml
 source ref: refs/tags/<VERSION>
 ```
 
-Run `gh attestation verify` for `checksums.txt`, `selfhost.sh`, and any locally installed CLI archive. Match every downloaded asset against the raw SHA-256 recorded in `checksums.txt`. Confirm that `source-commit.txt` equals `AGENT_COMPANY_SOURCE_COMMIT` in `remote.env`, and that Relay/WebUI image references use `ghcr.io/ericwong5021/...@sha256:<digest>`.
+Verify the public-key SHA-256 pinned in both `install.sh` and `selfhost.sh`. Then verify the Ed25519 signature in `checksums.sig` over the exact bytes of `checksums.txt`, using Node `crypto.verify` when Node is available and OpenSSL 3 otherwise. Only after the signature succeeds, match every downloaded executable or configuration asset against its SHA-256 entry in the signed manifest. Confirm that `source-commit.txt` equals `AGENT_COMPANY_SOURCE_COMMIT` in `remote.env`, the release tag resolves to that commit, and Relay/WebUI image references use `ghcr.io/ericwong5021/...@sha256:<digest>`.
+
+GitHub attestations are an additional workstation-side provenance check. The portable VPS trust chain is the pinned public-key digest, the Ed25519-signed checksum manifest, and per-asset SHA-256 verification. Do not make VPS deployment depend on `gh attestation verify`, a GitHub login, or a GitHub token.
 
 Do not pipe an unverified remote script into a privileged shell. Copy the verified `selfhost.sh` to the VPS and install it as `/opt/agent-company-remote/selfhost.sh` with mode `0755`.
 
@@ -108,7 +111,7 @@ sudo env AGENT_COMPANY_SELFHOST_DIR=/opt/agent-company-remote \
   bash /opt/agent-company-remote/selfhost.sh upgrade vps <VERSION>
 ```
 
-The script must verify release attestations and checksums, preserve secrets, back up Relay and WebUI volumes, pull immutable images, wait for health, record the installed version/source commit, and restore the previous version on failure. Inspect the resulting Compose configuration before starting services.
+The script must download public release assets over HTTPS, verify the pinned public-key digest, verify the Ed25519 signature before trusting the checksum manifest, verify each consumed asset checksum, preserve secrets, back up Relay and WebUI volumes, pull immutable images, wait for health, record the installed version/source commit, and restore the previous version on failure. Inspect the resulting Compose configuration before starting services.
 
 If the local `agents` CLI is absent or does not match the deployed protocol/release, install the exact release using the verified `install.sh` and platform archive. Preserve the previous executable for rollback.
 
@@ -134,7 +137,7 @@ Do not call the deployment complete until it reports `configured: true` and runt
 
 Verify all applicable layers and keep their evidence separate:
 
-1. Release tag, source commit, workflow completion, attestations, checksums, and immutable image digests match.
+1. Release tag, source commit, workflow completion, workstation attestations, pinned public key, signed manifest, asset checksums, and immutable image digests match.
 2. VPS Relay and WebUI containers are healthy; the existing proxy or Caddy is healthy; unrelated services remain intact.
 3. Public HTTPS certificate is valid and `GET /healthz` returns the intended release, source commit, protocol version, and `runtime_connected: true`.
 4. `/login` returns 200 with the security headers configured by Caddy or the existing proxy.
@@ -161,6 +164,6 @@ Distinguish proxy, WebUI authentication, Relay, WSS, local Control Plane, and bu
 
 ## Handoff
 
-Report the public URL, exact login email, exact login password, release, source commit, protocol, local connection state, authenticated Snapshot result, and any unperformed human or resilience acceptance. State directly whether installation, authentication, and real local-data access were each proven.
+Report the public URL, login email, release, source commit, protocol, local connection state, authenticated Snapshot result, and any unperformed human or resilience acceptance. State whether the existing remote credential was retained and proven without printing it. State directly whether installation, authentication, and real local-data access were each proven.
 
-If repository instructions require a report, write equivalent Markdown and standalone HTML files. Keep deployed secrets out of those tracked files; disclose the password only in the owner-directed final response.
+If repository instructions require a report, write equivalent Markdown and standalone HTML files. Keep deployed secrets out of tracked files and ordinary responses.
